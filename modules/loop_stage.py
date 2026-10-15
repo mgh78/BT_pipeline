@@ -27,8 +27,6 @@ STATUS_TEXT = {
     'accepted': 'the judge accepted the tree',
     'failed_judge_cap': 'the judge rejected every tree',
     'failed_syntax_cap': 'no tree passed the syntax check',
-    'failed_clarification_cap': 'the generator kept asking questions',
-    'no_answer': 'the generator asked a question instead of writing a tree',
     'judge_error': 'the judge never returned a valid form',
     'error': 'the run stopped with an error',
 }
@@ -97,8 +95,6 @@ class GenerationLoopStage(Stage):
             return judge.ask(message, scene, context,
                              tag=f'{folder}/judge/{call + 1:02d}')
 
-        ask_user = self._clarification_source(payload)
-
         # --- Run it ---------------------------------------------------------
 
         def on_update(record, attempt):
@@ -115,7 +111,6 @@ class GenerationLoopStage(Stage):
             generate=generate,
             syntax_check=syntax_check,
             judge=ask_judge,
-            ask_user=ask_user,
             extract_code=generator.extract_code,
             on_update=on_update)
 
@@ -125,33 +120,6 @@ class GenerationLoopStage(Stage):
         result = self._report(context, payload, record, artifacts)
         payload['loop_summary'] = loop_summary(record, payload)
         return result
-
-    # --- Clarification ---------------------------------------------------
-
-    def _clarification_source(self, payload):
-        """Return ``ask_user(question)``.
-
-        The pipeline runs on its own: nobody is waiting to answer a question, so a
-        ``CLARIFY:`` reply ends the run as ``no_answer`` and the question itself is the
-        result - it is kept in the attempt, in ``summary.json`` and in the window.
-
-        A run may still carry ``clarification_answers``, a list of answers decided
-        before it started. The loop tests use that to exercise the answered path.
-        """
-        answers = list(payload.get('clarification_answers') or [])
-        payload.setdefault('clarification_answers_used', [])
-
-        def from_list(question):
-            self.log.info('the generator asked: %s', question)
-            if not answers:
-                self.log.info('no answer was provided for this run; stopping here')
-                return None
-            answer = answers.pop(0)
-            payload['clarification_answers_used'].append(answer)
-            self.log.info('prepared answer: %s', answer)
-            return answer
-
-        return from_list
 
     # --- Artifacts and the result ----------------------------------------
 
@@ -168,11 +136,6 @@ class GenerationLoopStage(Stage):
         status = record['status']
         counts = record['counts']
         attempts = record['attempts']
-
-        if record['clarifications']:
-            artifacts['clarifications'] = context.write_json(
-                'clarifications.json',
-                [{'question': q, 'answer': a} for q, a in record['clarifications']])
 
         accepted = record['accepted_tree']
         if accepted is not None:
@@ -232,12 +195,8 @@ class GenerationLoopStage(Stage):
 
     @staticmethod
     def _attempt_line(attempt):
-        if attempt['kind'] == 'clarify':
-            question = attempt.get('question', '')
-            answered = attempt.get('answer')
-            return (f'asked: {question}'
-                    + (f'  →  answered: {answered}' if answered
-                       else '  →  nothing answered, so the run stopped here'))
+        if attempt['kind'] == 'no_code':
+            return 'no code in the reply, asked again'
         if attempt.get('syntax_passed') is False:
             return 'tree written, syntax check failed'
         return f'tree written, syntax check passed, {form_summary(attempt.get("judge_form"))}'
@@ -267,7 +226,6 @@ def loop_summary(record, payload):
         },
         'models': {'generator': payload.get('generator'), 'judge': payload.get('judge')},
         'caps': {
-            'clarification_limit': config.CLARIFICATION_LIMIT,
             'syntax_failure_limit': config.SYNTAX_FAILURE_LIMIT,
             'judge_rejection_limit': config.JUDGE_REJECTION_LIMIT,
             'judge_format_retries': config.JUDGE_FORMAT_RETRIES,
@@ -277,17 +235,12 @@ def loop_summary(record, payload):
             't_first_valid_tree': _moment(record['times']['first_valid_tree']),
             't_accepted': _moment(record['times']['accepted']),
         },
-        'clarifications': [{'question': q, 'answer': a}
-                           for q, a in record['clarifications']],
         'attempts': [
             {
                 'n': attempt['n'],
                 'kind': attempt['kind'],
                 'syntax_passed': attempt.get('syntax_passed'),
                 'judge_form': attempt.get('judge_form'),
-                'question': attempt.get('question'),
-                'answer': attempt.get('answer'),
-                'format_warning': attempt.get('format_warning'),
                 'ground_truth': attempt.get('ground_truth'),
             }
             for attempt in record['attempts']

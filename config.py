@@ -72,10 +72,10 @@ AVAILABLE_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-5']
 # --- Loop caps ---------------------------------------------------------------
 
 # Generator, syntax check and judge run in a loop until a tree is accepted or one of
-# these caps is reached. All of them are counted per run. Syntax failures do not count
-# toward the judge cap, and clarifications count toward neither.
-CLARIFICATION_LIMIT = 2     # questions the generator may ask; a 3rd ends the run
-SYNTAX_FAILURE_LIMIT = 3    # the run ends at the 3rd tree that fails the syntax check
+# these caps is reached. Both are counted per run, and syntax failures do not count
+# toward the judge cap.
+SYNTAX_FAILURE_LIMIT = 3    # the run ends at the 3rd tree the syntax check rejects;
+                            # a reply holding no code at all counts as one of them
 JUDGE_REJECTION_LIMIT = 3   # the run ends at the 3rd rejected tree (study design)
 JUDGE_FORMAT_RETRIES = 2    # extra judge calls when a reply is not a valid form
 

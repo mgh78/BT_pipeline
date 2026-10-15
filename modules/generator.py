@@ -1,10 +1,10 @@
-"""The BT creator: turns one command into a behavior tree, or asks a question.
+"""The BT creator: turns one command into a behavior tree.
 
 It does one thing only. It translates the command into the four actions, in the order
-the user gave them, and it asks the user with ``CLARIFY:`` when something it needs is
-missing or when the request cannot be expressed with those actions. It does not check
-whether the plan is safe, complete or well ordered - the semantic judge does that, and
-sends its findings back here for the next attempt.
+the user gave them, and it always returns a tree - an unclear command is read the most
+reasonable way rather than questioned, and a part no action can carry out is left out.
+It does not check whether the plan is safe, complete or well ordered: the semantic
+judge does that, and sends its findings back here for the next attempt.
 
 So a tree that shakes an open test tube because the user never mentioned a cap is
 intended behaviour now, not a bug.
