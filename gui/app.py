@@ -321,7 +321,12 @@ class App(customtkinter.CTk):
         failed = [name for name, result in results.items()
                   if result.status in (StageStatus.FAILED, StageStatus.REJECTED)]
         record = self.payload.get('loop_record') or {}
-        if failed:
+        if record.get('status') == 'no_answer':
+            # The generator asked instead of building. The question is the result.
+            question = next((a.get('question') for a in reversed(record['attempts'])
+                             if a.get('question')), '')
+            self.status(f'The generator asks: {question}', warn=True)
+        elif failed:
             self.status(f'{self.pipeline.stage(failed[0]).title} — '
                         f'{results[failed[0]].summary}', error=True)
             if failed[0] == 'loop' and record.get('status') == 'failed_syntax_cap':
