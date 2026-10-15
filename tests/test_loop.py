@@ -62,7 +62,8 @@ REJECT = ('{"verdict": "reject", "errors": ["missing_precondition"], '
           '"reason": "ShakeTube shakes an open tube that holds liquid."}')
 NOT_A_FORM = 'Looks fine to me.'
 
-QUESTION = 'CLARIFY: How many times should I shake the test tube?'
+NO_CODE = ('I can shake the test tube, but I would like to know how many times before '
+           'I write the tree.')
 
 
 class Scripted:
@@ -92,13 +93,12 @@ def run(monkeypatch, tmp_path):
     """Run the real pipeline with scripted replies, in a throwaway run folder."""
     monkeypatch.setattr(config, 'RUNS_DIR', tmp_path / 'runs')
 
-    def go(generator_replies, judge_replies=(), answers=()):
+    def go(generator_replies, judge_replies=()):
         scripted = Scripted(generator_replies, judge_replies)
         monkeypatch.setattr(llm, 'ask', scripted)
         pipeline = Pipeline([SceneStage(), CommandStage(), GenerationLoopStage()])
         context = RunContext(scene=SCENE)
-        payload = {'scene': SCENE, 'command': COMMAND,
-                   'clarification_answers': list(answers)}
+        payload = {'scene': SCENE, 'command': COMMAND}
         pipeline.run(context, payload)
         return payload['loop_record'], scripted, context
 
@@ -154,28 +154,26 @@ def test_three_syntax_failures_end_the_run(run):
     assert not scripted.messages('judge')
 
 
-# --- 6-8: questions ----------------------------------------------------------
+# --- 6-7: a reply that holds no tree -----------------------------------------
 
-def test_question_then_answer_then_tree(run):
-    record, scripted, _ = run([QUESTION, GOOD_TREE], [ACCEPT], answers=['two times'])
+def test_reply_without_code_is_sent_back(run):
+    record, scripted, _ = run([NO_CODE, GOOD_TREE], [ACCEPT])
     assert record['status'] == 'accepted'
-    assert record['counts']['clarifications'] == 1
+    assert record['counts']['syntax_failures'] == 1
+    assert record['attempts'][0]['kind'] == 'no_code'
 
-    judge_message = scripted.messages('judge')[0]
-    assert 'CLARIFICATION:' in judge_message
-    assert 'two times' in judge_message
-
-
-def test_question_without_an_answer_stops_the_run(run):
-    record, _, _ = run([QUESTION], [])
-    assert record['status'] == 'no_answer'
-    assert record['attempts'][-1]['question'].startswith('How many times')
+    second = scripted.messages('generator')[1]
+    assert 'no create_behavior_tree() code block' in second
+    # There was no tree to send back, only the demand for one.
+    assert 'PREVIOUS TREE:' not in second
 
 
-def test_three_questions_end_the_run(run):
-    record, _, _ = run([QUESTION] * 3, [], answers=['two times', 'the left one'])
-    assert record['status'] == 'failed_clarification_cap'
-    assert record['counts']['clarifications'] == 3
+def test_three_replies_without_code_end_the_run(run):
+    record, scripted, _ = run([NO_CODE] * 3, [])
+    assert record['status'] == 'failed_syntax_cap'
+    assert record['counts']['syntax_failures'] == 3
+    assert record['counts']['judge_calls'] == 0
+    assert not scripted.messages('judge')
 
 
 # --- 9-10: the judge's own format --------------------------------------------
