@@ -18,12 +18,13 @@ from PIL import Image
 
 import config
 from core import logging_setup
-from core.pipeline import Pipeline, StageResult, StageStatus
+from core.pipeline import Check, Pipeline, StageResult, StageStatus
 from core.run_context import RunContext
 from gui.graph_view import GraphView
 from gui.log_view import LogView
 from gui.stage_panel import CheckTable, StagePanel, open_path
 from modules import graph as graph_module
+from modules import loop
 from modules.command import CommandStage
 from modules.enrichment import EnrichmentStage
 from modules.graph import TreeGraphStage
@@ -113,6 +114,8 @@ class App(customtkinter.CTk):
         self.panels = {}
         self.context = None
         self.running = False
+        self._attempts = []        # the attempts of the run on screen
+        self._payload_png = None   # the saved image of the accepted tree
 
         self.grid_columnconfigure(0, weight=0, minsize=420)
         self.grid_columnconfigure(1, weight=3, minsize=480)
@@ -223,9 +226,27 @@ class App(customtkinter.CTk):
             self.panels[stage.name] = panel
 
     def _build_output_column(self):
-        self.tabs = customtkinter.CTkTabview(self, corner_radius=8)
-        self.tabs.grid(row=1, column=2, sticky='nsew', padx=(8, 16), pady=(0, 8))
-        for name in ('Tree graph', 'Code', 'Checks'):
+        column = customtkinter.CTkFrame(self, fg_color='transparent')
+        column.grid(row=1, column=2, sticky='nsew', padx=(8, 16), pady=(0, 8))
+        column.grid_columnconfigure(0, weight=1)
+        column.grid_rowconfigure(1, weight=1)
+
+        # One run can hold several attempts; this picks which one is shown below.
+        bar = customtkinter.CTkFrame(column, corner_radius=8)
+        bar.grid(row=0, column=0, sticky='ew', pady=(0, 6))
+        bar.grid_columnconfigure(1, weight=1)
+
+        customtkinter.CTkLabel(bar, text='Attempt', font=('Arial', 12, 'bold')).grid(
+            row=0, column=0, padx=(14, 8), pady=8)
+        self.attempt_menu = customtkinter.CTkOptionMenu(
+            bar, values=['—'], width=320, height=28, font=('Arial', 11),
+            command=self.show_attempt)
+        self.attempt_menu.grid(row=0, column=1, padx=(0, 14), pady=8, sticky='w')
+        self.attempt_menu.configure(state='disabled')
+
+        self.tabs = customtkinter.CTkTabview(column, corner_radius=8)
+        self.tabs.grid(row=1, column=0, sticky='nsew')
+        for name in ('Tree graph', 'Code', 'Checks', 'Judge'):
             self.tabs.add(name)
             self.tabs.tab(name).grid_columnconfigure(0, weight=1)
             self.tabs.tab(name).grid_rowconfigure(0, weight=1)
@@ -243,6 +264,11 @@ class App(customtkinter.CTk):
 
         self.check_table = CheckTable(self.tabs.tab('Checks'), label_text='')
         self.check_table.grid(row=0, column=0, sticky='nsew', padx=4, pady=4)
+
+        self.judge_box = customtkinter.CTkTextbox(
+            self.tabs.tab('Judge'), wrap='word', font=MONOSPACE)
+        self.judge_box.grid(row=0, column=0, sticky='nsew', padx=8, pady=8)
+        self.judge_box.configure(state='disabled')
 
     # --- Running --------------------------------------------------------
 
@@ -337,17 +363,104 @@ class App(customtkinter.CTk):
                         f'{"s" if attempts != 1 else ""}. '
                         f'Everything is in {self.context.directory.name}.')
 
+    # --- Showing one attempt --------------------------------------------
+
     def _show_outputs(self, payload):
-        code = payload.get('code') or payload.get('answer') or ''
-        self._set_code(code)
-        self.check_table.show(payload.get('checks', []))
-        if payload.get('graph_layout'):
-            self.graph_view.show(payload['graph_layout'], payload.get('graph_png'))
-            self.tabs.set('Tree graph')
-        elif not payload.get('code'):
+        """Fill the attempt selector and show the one that decided the run."""
+        record = payload.get('loop_record') or {}
+        self._attempts = list(record.get('attempts', []))
+        self._payload_png = payload.get('graph_png')
+
+        if not self._attempts:
+            self.attempt_menu.configure(values=['—'], state='disabled')
+            self.attempt_menu.set('—')
+            self._set_code(payload.get('answer') or '')
+            self.check_table.show([])
+            self._set_judge('')
             self.graph_view.clear('No tree was generated.')
+            return
+
+        labels = [self._attempt_label(a) for a in self._attempts]
+        self.attempt_menu.configure(values=labels, state='normal')
+        self.attempt_menu.set(labels[-1])
+        self.show_attempt(labels[-1])
+
+    def _attempt_label(self, attempt):
+        n = attempt['n']
+        if attempt['kind'] == 'clarify':
+            return f'{n} · question'
+        if attempt.get('syntax_passed') is False:
+            return f'{n} · syntax failed'
+        form = attempt.get('judge_form')
+        if form is None:
+            return f'{n} · no judgement'
+        return f'{n} · judge {form["verdict"]}ed'
+
+    def show_attempt(self, label):
+        """Switch the code, checks, judgement and graph to one attempt."""
+        attempt = next((a for a in self._attempts
+                        if self._attempt_label(a) == label), None)
+        if attempt is None:
+            return
+
+        if attempt['kind'] == 'clarify':
+            self._set_code(attempt.get('generator_reply') or '')
+            self.check_table.show([])
+            self._set_judge('The generator asked a question instead of writing a tree, '
+                            'so there was nothing to judge.\n\n'
+                            f'Question: {attempt.get("question", "")}')
+            self.graph_view.clear('This attempt was a question, not a tree.')
+            self.tabs.set('Code')
+            return
+
+        self._set_code(attempt.get('code') or '')
+        self.check_table.show(attempt.get('checks', []))
+        self._set_judge(self._judgement_text(attempt))
+
+        tree = attempt.get('tree')
+        if tree is not None:
+            layout = graph_module.layout(graph_module.from_py_trees(tree))
+            accepted = attempt.get('judge_form', {}) or {}
+            self.graph_view.show(
+                layout,
+                self._payload_png if accepted.get('verdict') == 'accept' else None)
+            self.tabs.set('Tree graph')
+        elif attempt.get('syntax_passed'):
+            # A run reopened from disk: only the accepted tree is stored as a graph.
+            self.graph_view.clear('This run was reopened from disk, which keeps the '
+                                  'graph of the accepted tree only.')
         else:
-            self.graph_view.clear('The tree was not drawn — the syntax check did not pass.')
+            self.graph_view.clear('The syntax check did not pass, so no tree was built.')
+            self.tabs.set('Checks')
+
+    @staticmethod
+    def _judgement_text(attempt):
+        form = attempt.get('judge_form')
+        lines = []
+        if form is None:
+            if attempt.get('syntax_passed') is False:
+                lines.append('The syntax check failed, so the judge was never asked.')
+            else:
+                lines.append('The judge did not return a valid judgement form.')
+            for index, raw in enumerate(attempt.get('judge_replies', []), start=1):
+                lines += ['', f'Reply {index}:', raw]
+        else:
+            lines.append(f'Verdict: {form["verdict"]}')
+            if form['errors']:
+                lines.append('')
+                lines.append('What is wrong:')
+                lines += [f'  · {sentence}' for sentence in loop.form_sentences(form)]
+            if form['reason']:
+                lines += ['', 'Reason:', form['reason']]
+        if attempt.get('outline'):
+            lines += ['', 'The tree the judge was shown:', '', attempt['outline']]
+        return '\n'.join(lines)
+
+    def _set_judge(self, text):
+        self.judge_box.configure(state='normal')
+        self.judge_box.delete('1.0', 'end')
+        self.judge_box.insert('1.0', text)
+        self.judge_box.configure(state='disabled')
 
     # --- Past runs ------------------------------------------------------
 
@@ -355,6 +468,45 @@ class App(customtkinter.CTk):
         runs = RunContext.existing_runs()[:40]
         self.run_menu.configure(values=['current run', *runs])
         self.run_menu.set('current run')
+
+    def _load_stored_attempts(self, directory, summary):
+        """Rebuild the attempt selector of a run that has already finished.
+
+        Everything comes off disk: the code, the check report and the judgement form
+        of each attempt. The built trees are not stored, so the graph of a past run
+        comes from bt_graph.json - the accepted tree only.
+        """
+        stored = ((summary.get('loop') or {}).get('attempts') or [])
+        self._attempts = []
+        self._payload_png = directory / 'bt_graph.png'
+
+        for entry in stored:
+            folder = directory / 'attempts' / f'{entry["n"]:02d}'
+            attempt = dict(entry)
+            code_file = folder / 'create_behavior_tree.py'
+            if code_file.exists():
+                attempt['code'] = code_file.read_text(encoding='utf-8')
+            report = folder / 'tester_report.json'
+            if report.exists():
+                data = json.loads(report.read_text(encoding='utf-8'))
+                attempt['checks'] = [Check(**c) for c in data.get('checks', [])]
+            outline = folder / 'judge_outline.txt'
+            if outline.exists():
+                attempt['outline'] = outline.read_text(encoding='utf-8')
+            self._attempts.append(attempt)
+
+        if not self._attempts:
+            self.attempt_menu.configure(values=['—'], state='disabled')
+            self.attempt_menu.set('—')
+            self._set_code('')
+            self.check_table.show([])
+            self._set_judge('')
+            return
+
+        labels = [self._attempt_label(a) for a in self._attempts]
+        self.attempt_menu.configure(values=labels, state='normal')
+        self.attempt_menu.set(labels[-1])
+        self.show_attempt(labels[-1])
 
     def open_run(self, run_id):
         """Reopen a finished run from its directory."""
@@ -372,13 +524,10 @@ class App(customtkinter.CTk):
 
         for panel in self.panels.values():
             panel.reset()
-        checks = []
         for name, payload in summary.get('stages', {}).items():
             result = StageResult.from_dict(payload)
             if name in self.panels:
                 self.panels[name].set_result(result)
-            if name == 'tester':
-                checks = result.checks
 
         self.command_box.delete('1.0', 'end')
         self.command_box.insert('1.0', summary.get('command') or '')
@@ -386,16 +535,7 @@ class App(customtkinter.CTk):
             self.scene_panel.menu.set(summary['scene'])
             self.scene_panel.select(summary['scene'])
 
-        code_file = directory / 'create_behavior_tree.py'
-        rejection = directory / 'rejection.txt'
-        if code_file.exists():
-            self._set_code(code_file.read_text(encoding='utf-8'))
-        elif rejection.exists():
-            self._set_code(rejection.read_text(encoding='utf-8'))
-        else:
-            self._set_code('')
-
-        self.check_table.show(checks)
+        self._load_stored_attempts(directory, summary)
 
         graph_file = directory / 'bt_graph.json'
         if graph_file.exists():
