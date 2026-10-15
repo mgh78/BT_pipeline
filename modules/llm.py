@@ -31,6 +31,14 @@ def load_api_key():
     return key
 
 
+def _rejects_temperature(error):
+    """True when the API refused the call only because of the temperature argument."""
+    text = str(error)
+    return 'temperature' in text and (
+        'unsupported_value' in text or 'does not support' in text
+        or 'Unsupported parameter' in text or 'unsupported_parameter' in text)
+
+
 def readable_error(error):
     """Turn an API error into one sentence a person can act on.
 
@@ -70,7 +78,7 @@ def encode_image(path):
 
 
 def ask(system_prompt, text, model, temperature, logger, context=None,
-        image_path=None, tag='llm'):
+        image_path=None, tag='llm', response_format=None):
     """Send one chat completion and return ``{'text', 'usage', 'seconds', 'model'}``.
 
     Args:
@@ -80,7 +88,10 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
         logger: the calling module's logger, so the call appears in its own log file.
         context: the RunContext, when the prompt and reply should be saved as artifacts.
         image_path: a scene photo to attach to the user message.
-        tag: artifact name prefix, for example 'enrichment' or 'generation'.
+        tag: artifact name prefix, for example 'enrichment' or 'attempts/01/judge'.
+            It may contain folders, which are created.
+        response_format: an API response-format object, used by the judge to request
+            its judgement form as structured output. Omitted when None.
 
     Returns:
         dict with the reply text, token usage, elapsed seconds and the model used, plus
@@ -108,18 +119,35 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
         image=bool(image_url), user_text=str(text))
 
     client = OpenAI(api_key=load_api_key())
+    arguments = {
+        'model': model,
+        'temperature': temperature,
+        'messages': [
+            {'role': 'developer', 'content': system_prompt},
+            {'role': 'user', 'content': user_content},
+        ],
+    }
+    if response_format is not None:
+        arguments['response_format'] = response_format
+
     started = time.time()
     try:
-        response = client.chat.completions.create(
-            model=model,
-            temperature=temperature,
-            messages=[
-                {'role': 'developer', 'content': system_prompt},
-                {'role': 'user', 'content': user_content},
-            ])
+        response = client.chat.completions.create(**arguments)
     except Exception as error:  # noqa: BLE001 - turn any client error into a stage error
-        logger.error('the model call failed: %s', error)
-        raise StageError(readable_error(error)) from error
+        if _rejects_temperature(error) and 'temperature' in arguments:
+            # Some models accept only their default temperature. Drop it and say so,
+            # rather than failing the run over a parameter we only set for determinism.
+            logger.warning('%s does not accept temperature=%s; retrying without it',
+                           model, temperature)
+            arguments.pop('temperature')
+            try:
+                response = client.chat.completions.create(**arguments)
+            except Exception as retry_error:  # noqa: BLE001
+                logger.error('the model call failed: %s', retry_error)
+                raise StageError(readable_error(retry_error)) from retry_error
+        else:
+            logger.error('the model call failed: %s', error)
+            raise StageError(readable_error(error)) from error
 
     seconds = time.time() - started
     answer = (response.choices[0].message.content or '').strip()
