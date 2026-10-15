@@ -213,12 +213,13 @@ class SyntaxTestStage(Stage):
     title = 'Syntax check'
     description = 'Parse and check the generated function. Nothing is executed on the robot.'
 
-    def execute(self, context, payload):
-        code = payload.get('code')
-        scene = payload.get('scene_object')
-        if not code:
-            raise StageError('There is no generated code to check.')
+    def check(self, code, scene=None):
+        """Run every check against one piece of generated code.
 
+        Returns ``(checks, built_tree_or_None, analysis_or_None)``. This is what the
+        generation loop calls for each attempt; :meth:`execute` wraps it so the stage
+        still works on its own.
+        """
         checks = []
 
         # --- Syntax ------------------------------------------------------
@@ -228,7 +229,7 @@ class SyntaxTestStage(Stage):
             checks.append(Check('syntax.parse', 'The code parses as Python', False,
                                 f'{error.msg} (line {error.lineno}, column {error.offset})',
                                 line=error.lineno, group='Syntax'))
-            return self._report(context, payload, checks, built=None)
+            return checks, None, None
 
         checks.append(Check('syntax.parse', 'The code parses as Python', True,
                             'no syntax errors', group='Syntax'))
@@ -236,7 +237,7 @@ class SyntaxTestStage(Stage):
         analysis = Analysis(tree)
         checks.extend(self._check_syntax(analysis))
         if analysis.function is None:
-            return self._report(context, payload, checks, built=None)
+            return checks, None, analysis
 
         checks.extend(self._check_structure(analysis))
         checks.extend(self._check_arguments(analysis))
@@ -247,6 +248,20 @@ class SyntaxTestStage(Stage):
         built, build_checks = self._check_build(code, analysis)
         checks.extend(build_checks)
 
+        return checks, built, analysis
+
+    @staticmethod
+    def passed(checks):
+        """True when no blocking check failed. Warnings never stop a run."""
+        return not any(check.blocking for check in checks)
+
+    def execute(self, context, payload):
+        code = payload.get('code')
+        scene = payload.get('scene_object')
+        if not code:
+            raise StageError('There is no generated code to check.')
+
+        checks, built, analysis = self.check(code, scene)
         return self._report(context, payload, checks, built=built, analysis=analysis)
 
     # --- Syntax group ----------------------------------------------------
@@ -301,7 +316,9 @@ class SyntaxTestStage(Stage):
                 'exactly as the prompt specifies' if correct
                 else f'expected `{EXPECTED_LOG_LINE}`, found `{logged or "nothing"}`'
                      f'{"" if catches == "Exception" else f" and it catches {catches}"}',
-                line=handler.lineno, group='Structure'))
+                # A different message in the except block is cosmetic: the code still
+                # runs, so it must not cost a repair round.
+                line=handler.lineno, severity='warning', group='Structure'))
 
         # The root: returned, a Sequence, named Root, with memory.
         root = analysis.root
@@ -494,29 +511,6 @@ class SyntaxTestStage(Stage):
             'graspable objects are grasped, locations are used as locations'
             if not wrong_role else '; '.join(wrong_role), group='Scene'))
 
-        # The prompt's spill rule: shaking a container that holds liquid needs a Close
-        # on that same object first. Reported as a warning - it is the prompt's own
-        # physical rule rather than a syntax error.
-        order = [n for n in analysis.nodes if n.kind == 'action']
-        unclosed = []
-        for index, node in enumerate(order):
-            if node.constructor != 'Shake':
-                continue
-            target = node.values.get('obj')
-            obj = scene.by_id(target) if isinstance(target, str) else None
-            if obj is None or not obj.holds_liquid:
-                continue
-            closed_before = any(
-                earlier.constructor == 'Close' and earlier.values.get('obj') == target
-                for earlier in order[:index])
-            if not closed_before:
-                unclosed.append(f'line {node.lineno}: "{target}" holds liquid and is shaken '
-                                f'without being closed first')
-        checks.append(Check(
-            'scene.spill', 'A container holding liquid is closed before it is shaken',
-            not unclosed,
-            'no open container is shaken' if not unclosed else '; '.join(unclosed),
-            severity='warning', group='Scene'))
         return checks
 
     # --- Build group -----------------------------------------------------
@@ -638,6 +632,39 @@ class SyntaxTestStage(Stage):
             StageStatus.FAILED if blocking else StageStatus.PASSED,
             summary=summary, detail=detail, artifacts=artifacts, checks=checks,
             error=blocking[0].message if blocking else None)
+
+
+# --- Automatic labels (analysis only) -----------------------------------------
+
+def spill_label(analysis, scene):
+    """Whether the tree shakes an open container that holds liquid.
+
+    This was once a check here. It is a physical rule, so judging it is now the
+    semantic judge's job - but it is cheap and exact, so it is still computed and
+    written to ``analysis_labels.json`` as an automatic label for evaluating the judge
+    later. It is never shown to the generator or to the judge, and it never changes a
+    status.
+    """
+    if analysis is None or scene is None:
+        return None
+
+    order = [node for node in analysis.nodes if node.kind == 'action']
+    unclosed = []
+    for index, node in enumerate(order):
+        if node.constructor != 'Shake':
+            continue
+        target = node.values.get('obj')
+        obj = scene.by_id(target) if isinstance(target, str) else None
+        if obj is None or not obj.holds_liquid:
+            continue
+        closed_before = any(
+            earlier.constructor == 'Close' and earlier.values.get('obj') == target
+            for earlier in order[:index])
+        if not closed_before:
+            unclosed.append(f'line {node.lineno}: "{target}" holds liquid and is shaken '
+                            f'without being closed first')
+
+    return {'shakes_open_container': bool(unclosed), 'details': unclosed}
 
 
 # --- The sandbox -------------------------------------------------------------
