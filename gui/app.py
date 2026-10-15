@@ -26,10 +26,9 @@ from gui.stage_panel import CheckTable, StagePanel, open_path
 from modules import graph as graph_module
 from modules.command import CommandStage
 from modules.enrichment import EnrichmentStage
-from modules.generator import BTGenerationStage
 from modules.graph import TreeGraphStage
+from modules.loop_stage import GenerationLoopStage
 from modules.scene import SceneStage, load_scene
-from modules.tester import SyntaxTestStage
 
 MONOSPACE = ('Menlo', 11) if os.name != 'nt' else ('Consolas', 11)
 SCENE_IMAGE_WIDTH = 380
@@ -109,7 +108,7 @@ class App(customtkinter.CTk):
         self.minsize(1380, 860)
 
         self.stages = [SceneStage(), CommandStage(), EnrichmentStage(),
-                       BTGenerationStage(), SyntaxTestStage(), TreeGraphStage()]
+                       GenerationLoopStage(), TreeGraphStage()]
         self.pipeline = Pipeline(self.stages, on_update=self._stage_updated)
         self.panels = {}
         self.context = None
@@ -189,10 +188,24 @@ class App(customtkinter.CTk):
         self.enrich_switch.select()
         self.enrich_switch.grid(row=2, column=0, padx=14, pady=(0, 12), sticky='w')
 
+        models = customtkinter.CTkFrame(box, fg_color='transparent')
+        models.grid(row=2, column=1, padx=6, pady=(0, 12), sticky='e')
+
+        customtkinter.CTkLabel(models, text='tree', text_color='gray60',
+                               font=('Arial', 10)).grid(row=0, column=0, padx=(0, 4))
         self.model_menu = customtkinter.CTkOptionMenu(
-            box, values=config.AVAILABLE_MODELS, width=130, height=30, font=('Arial', 11))
+            models, values=config.AVAILABLE_MODELS, width=118, height=28,
+            font=('Arial', 11))
         self.model_menu.set(config.BT_GENERATION_MODEL)
-        self.model_menu.grid(row=2, column=1, padx=6, pady=(0, 12))
+        self.model_menu.grid(row=0, column=1)
+
+        customtkinter.CTkLabel(models, text='judge', text_color='gray60',
+                               font=('Arial', 10)).grid(row=0, column=2, padx=(10, 4))
+        self.judge_menu = customtkinter.CTkOptionMenu(
+            models, values=config.AVAILABLE_MODELS, width=118, height=28,
+            font=('Arial', 11))
+        self.judge_menu.set(config.JUDGE_MODEL)
+        self.judge_menu.grid(row=0, column=3)
 
         self.run_button = customtkinter.CTkButton(
             box, text='Run pipeline', width=140, height=34, font=('Arial', 13, 'bold'),
@@ -267,6 +280,8 @@ class App(customtkinter.CTk):
             'scene': scene,
             'command': command,
             'generation_model': self.model_menu.get(),
+            'judge_model': self.judge_menu.get(),
+            'enrichment_on': 'enrichment' in selected,
         }
         self.running = True
         self.run_button.configure(state='disabled', text='Running…')
@@ -304,18 +319,18 @@ class App(customtkinter.CTk):
 
         results = self.pipeline.results
         failed = [name for name, result in results.items()
-                  if result.status == StageStatus.FAILED]
-        rejected = [name for name, result in results.items()
-                    if result.status == StageStatus.REJECTED]
+                  if result.status in (StageStatus.FAILED, StageStatus.REJECTED)]
+        record = self.payload.get('loop_record') or {}
         if failed:
-            self.status(f'{self.pipeline.stage(failed[0]).title} failed — '
+            self.status(f'{self.pipeline.stage(failed[0]).title} — '
                         f'{results[failed[0]].summary}', error=True)
-            if failed[0] == 'tester':
+            if failed[0] == 'loop' and record.get('status') == 'failed_syntax_cap':
                 self.tabs.set('Checks')
-        elif rejected:
-            self.status('The generator declined the command — see its panel.', warn=True)
         else:
-            self.status(f'Done. Everything is in {self.context.directory.name}.')
+            attempts = len(record.get('attempts', []))
+            self.status(f'Accepted after {attempts} attempt'
+                        f'{"s" if attempts != 1 else ""}. '
+                        f'Everything is in {self.context.directory.name}.')
 
     def _show_outputs(self, payload):
         code = payload.get('code') or payload.get('answer') or ''
