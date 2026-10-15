@@ -21,6 +21,7 @@ ENRICHMENT_PROMPT_DIR = CONTEXTUAL_ASR_DIR / 'prompt'
 
 # The behavior tree generation prompt is ours to edit, so it lives here.
 BT_GENERATION_PROMPT_FILE = PIPELINE_ROOT / 'prompts' / 'bt_generation_prompt.txt'
+SEMANTIC_JUDGE_PROMPT_FILE = BT_GENERATION_PROMPT_FILE.parent / 'semantic_judge_prompt.txt'
 
 # The API key file. The OPENAI_API_KEY environment variable takes precedence.
 API_KEY_FILE = CONTEXTUAL_ASR_DIR / 'API_KEY.txt'
@@ -57,8 +58,26 @@ BT_GENERATION_MODEL = 'gpt-4o'
 BT_GENERATION_TEMPERATURE = 0
 BT_GENERATION_SEND_SCENE_IMAGE = False
 
+# The semantic judge. It reads the tree the generator wrote and fills in the judgement
+# form; it never writes or repairs a tree. It may run on a different model from the
+# generator - whichever is used is recorded in the run's summary.json.
+JUDGE_MODEL = BT_GENERATION_MODEL
+JUDGE_TEMPERATURE = 0           # dropped automatically for a model that refuses it
+JUDGE_SEND_SCENE_IMAGE = False  # keep equal to BT_GENERATION_SEND_SCENE_IMAGE
+JUDGE_USE_STRUCTURED_OUTPUT = True
+
 # Models the GUI offers in its dropdowns.
 AVAILABLE_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-5']
+
+# --- Loop caps ---------------------------------------------------------------
+
+# Generator, syntax check and judge run in a loop until a tree is accepted or one of
+# these caps is reached. All of them are counted per run. Syntax failures do not count
+# toward the judge cap, and clarifications count toward neither.
+CLARIFICATION_LIMIT = 2     # questions the generator may ask; a 3rd ends the run
+SYNTAX_FAILURE_LIMIT = 3    # the run ends at the 3rd tree that fails the syntax check
+JUDGE_REJECTION_LIMIT = 3   # the run ends at the 3rd rejected tree (study design)
+JUDGE_FORMAT_RETRIES = 2    # extra judge calls when a reply is not a valid form
 
 # --- Logging -----------------------------------------------------------------
 
