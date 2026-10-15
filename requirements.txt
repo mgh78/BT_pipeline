@@ -10,3 +10,4 @@ graphviz>=0.20         # optional: renders bt_graph.dot when the dot binary exis
 openai>=1.0            # the generation and enrichment stages
 customtkinter>=5.2     # the interface
 pillow>=10.0           # the scene photos and the rendered tree image
+pytest>=8.0            # the loop tests in tests/
