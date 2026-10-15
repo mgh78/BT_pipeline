@@ -347,12 +347,7 @@ class App(customtkinter.CTk):
         failed = [name for name, result in results.items()
                   if result.status in (StageStatus.FAILED, StageStatus.REJECTED)]
         record = self.payload.get('loop_record') or {}
-        if record.get('status') == 'no_answer':
-            # The generator asked instead of building. The question is the result.
-            question = next((a.get('question') for a in reversed(record['attempts'])
-                             if a.get('question')), '')
-            self.status(f'The generator asks: {question}', warn=True)
-        elif failed:
+        if failed:
             self.status(f'{self.pipeline.stage(failed[0]).title} — '
                         f'{results[failed[0]].summary}', error=True)
             if failed[0] == 'loop' and record.get('status') == 'failed_syntax_cap':
@@ -387,8 +382,8 @@ class App(customtkinter.CTk):
 
     def _attempt_label(self, attempt):
         n = attempt['n']
-        if attempt['kind'] == 'clarify':
-            return f'{n} · question'
+        if attempt['kind'] == 'no_code':
+            return f'{n} · no code in the reply'
         if attempt.get('syntax_passed') is False:
             return f'{n} · syntax failed'
         form = attempt.get('judge_form')
@@ -403,13 +398,13 @@ class App(customtkinter.CTk):
         if attempt is None:
             return
 
-        if attempt['kind'] == 'clarify':
+        if attempt['kind'] == 'no_code':
             self._set_code(attempt.get('generator_reply') or '')
             self.check_table.show([])
-            self._set_judge('The generator asked a question instead of writing a tree, '
-                            'so there was nothing to judge.\n\n'
-                            f'Question: {attempt.get("question", "")}')
-            self.graph_view.clear('This attempt was a question, not a tree.')
+            self._set_judge('The reply held no create_behavior_tree() code block, so '
+                            'there was nothing to check or judge. It was sent back '
+                            'asking for the tree.')
+            self.graph_view.clear('This reply held no code, so no tree was built.')
             self.tabs.set('Code')
             return
 
