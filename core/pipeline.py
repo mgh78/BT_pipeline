@@ -187,6 +187,10 @@ class Pipeline:
                 'enriched_command': payload.get('enriched_command'),
                 'created_at': context.created_at.isoformat(timespec='seconds'),
                 'total_seconds': round(total, 3),
+                # The generation loop's own record: status, counters, every attempt
+                # with its judgement form, the models, the caps and the timestamps.
+                # Built by the loop stage, which knows what it ran.
+                'loop': payload.get('loop_summary'),
                 'stages': {name: result.as_dict() for name, result in self.results.items()},
             }
             context.write_json('summary.json', summary)
