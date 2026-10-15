@@ -1,0 +1,12 @@
+# The pipeline runs in the contextual-asr virtual environment. Only py_trees and
+# pydot had to be added to it; the rest are listed so the environment can be
+# rebuilt from scratch if needed.
+#
+#   ../contextual-asr/venv/bin/pip install -r requirements.txt
+
+py_trees>=2.2          # the behavior tree library the generated code uses
+pydot>=3.0             # DOT handling, used by the graph export
+graphviz>=0.20         # optional: renders bt_graph.dot when the dot binary exists
+openai>=1.0            # the generation and enrichment stages
+customtkinter>=5.2     # the interface
+pillow>=10.0           # the scene photos and the rendered tree image
