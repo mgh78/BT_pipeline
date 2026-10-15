@@ -6,6 +6,8 @@ instructions - without any other stage noticing: it only has to put a string int
 ``payload['command']``.
 """
 
+import time
+
 from core.pipeline import Stage, StageError, StageStatus
 
 
@@ -22,6 +24,7 @@ class CommandStage(Stage):
             raise StageError('The command is empty — type what the robot should do.')
 
         payload['command'] = command
+        payload['t_command'] = time.time()   # the clock the loop's timestamps run on
         self.log.info('command: %s', command)
 
         words = len(command.split())

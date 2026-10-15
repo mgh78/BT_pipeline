@@ -84,11 +84,16 @@ class EnrichmentStage(Stage):
 
         system_prompt = self.build_system_prompt(scene)
         image = scene.image_path if config.ENRICHMENT_SEND_SCENE_IMAGE else None
+        model = payload.get('enrichment_model') or config.ENRICHMENT_MODEL
+        payload['enrichment_on'] = True
+        payload['enrichment'] = {'model': model,
+                                 'temperature': config.ENRICHMENT_TEMPERATURE,
+                                 'scene_image': config.ENRICHMENT_SEND_SCENE_IMAGE}
 
         reply = llm.ask(
             system_prompt=system_prompt,
             text=command,
-            model=payload.get('enrichment_model') or config.ENRICHMENT_MODEL,
+            model=model,
             temperature=config.ENRICHMENT_TEMPERATURE,
             logger=self.log,
             context=context,
