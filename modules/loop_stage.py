@@ -72,7 +72,10 @@ class GenerationLoopStage(Stage):
             folder = attempt_folder(attempt)
             checks, tree, analysis = tester.check(code, scene)
             passed = tester.passed(checks)
-            attempt['checks'] = checks  # the Check objects, for the window
+            # Kept for the window, which lets you look at any attempt, not only the
+            # accepted one.
+            attempt['checks'] = checks
+            attempt['tree'] = tree
 
             artifacts[f'attempt {attempt["n"]} tree'] = context.write_text(
                 f'{folder}/create_behavior_tree.py', code + '\n')
