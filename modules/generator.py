@@ -1,38 +1,45 @@
-"""Stage 4 - generate the behavior tree with ChatGPT.
+"""The BT creator: turns one command into a behavior tree, or asks a question.
 
-The system prompt is ``prompts/bt_generation_prompt.txt`` with ``{scene_objects}``
-filled in from the loaded scene, and the scene photo is attached so the model can
-resolve references such as "the left test tube".
+It does one thing only. It translates the command into the four actions, in the order
+the user gave them, and it asks the user with ``CLARIFY:`` when something it needs is
+missing or when the request cannot be expressed with those actions. It does not check
+whether the plan is safe, complete or well ordered - the semantic judge does that, and
+sends its findings back here for the next attempt.
 
-The model answers in one of two ways, and the prompt makes it choose:
-
-* a ``python`` code block holding ``create_behavior_tree()`` - the command was accepted;
-* plain text - the command was declined under Rule U (something is missing or
-  ambiguous) or Rule A (the robot cannot do what was asked).
-
-A declined command is not a failure of this stage: it is the generator working as
-specified, so the stage reports ``REJECTED`` and the run stops with the model's own
-explanation shown to the user.
+So a tree that shakes an open test tube because the user never mentioned a cap is
+intended behaviour now, not a bug.
 """
 
 import re
 
 import config
-from core.pipeline import Stage, StageError, StageStatus
+from core import logging_setup
+from core.pipeline import StageError
 from modules import llm
+
+log = logging_setup.get_logger('generator')
 
 CODE_BLOCK_PATTERN = re.compile(r'```(?:python)?\s*(.*?)```', re.DOTALL)
 
 
-class BTGenerationStage(Stage):
-    """Ask the model for ``create_behavior_tree()`` and keep what it answered."""
+class BTGenerator:
+    """One generator, reused for every call in a run."""
 
     name = 'generator'
     title = 'Behavior tree'
-    description = 'Ask ChatGPT for the create_behavior_tree() function.'
 
-    def build_system_prompt(self, scene):
-        """Return the generation prompt with this scene's object list inserted."""
+    def __init__(self, model=None, temperature=None):
+        self.model = model or config.BT_GENERATION_MODEL
+        self.temperature = (config.BT_GENERATION_TEMPERATURE if temperature is None
+                            else temperature)
+        self.log = log
+
+    def system_prompt(self, scene):
+        """The generation prompt with this scene's object list inserted.
+
+        Filled with ``str.replace``: the prompt contains the literal ``{e}`` of the
+        except block, so ``str.format`` would break it.
+        """
         path = config.BT_GENERATION_PROMPT_FILE
         if not path.exists():
             raise StageError(f'The generation prompt is missing: {path}')
@@ -44,7 +51,11 @@ class BTGenerationStage(Stage):
 
     @staticmethod
     def extract_code(answer):
-        """Return the code in the reply, or None when the reply is plain text."""
+        """Return the code in the reply, or None when the reply is not code.
+
+        None means the generator asked a question instead; the loop reads that with
+        ``loop.parse_generator_reply``.
+        """
         match = CODE_BLOCK_PATTERN.search(answer)
         if match:
             return match.group(1).strip()
@@ -53,82 +64,40 @@ class BTGenerationStage(Stage):
             return answer.strip()
         return None
 
-    def execute(self, context, payload):
-        scene = payload.get('scene_object')
-        if scene is None:
-            raise StageError('Run the scene stage first.')
-
-        # The enriched command is what the generator should see; fall back to the raw
-        # one when enrichment was skipped.
-        command = (payload.get('enriched_command') or payload.get('command') or '').strip()
-        if not command:
-            raise StageError('There is no command to generate a tree from.')
-        payload['generator_input'] = command
-
-        system_prompt = self.build_system_prompt(scene)
+    def ask(self, message, scene, context=None, tag='generation'):
+        """Send one generator call and return its raw reply."""
         image = scene.image_path if config.BT_GENERATION_SEND_SCENE_IMAGE else None
-
         reply = llm.ask(
-            system_prompt=system_prompt,
-            text=command,
-            model=payload.get('generation_model') or config.BT_GENERATION_MODEL,
-            temperature=config.BT_GENERATION_TEMPERATURE,
+            system_prompt=self.system_prompt(scene),
+            text=message,
+            model=self.model,
+            temperature=self.temperature,
             logger=self.log,
             context=context,
             image_path=image,
-            tag='generation')
+            tag=tag)
+        return reply['text']
 
-        answer = reply['text']
-        code = self.extract_code(answer)
-        payload['answer'] = answer
-        payload['code'] = code
+    def describe(self):
+        """What is recorded about this generator in the run's summary."""
+        return {'model': self.model, 'temperature': self.temperature,
+                'scene_image': config.BT_GENERATION_SEND_SCENE_IMAGE}
 
-        artifacts = dict(reply['artifacts'])
-        detail = {
-            'command sent': command,
-            'model': reply['model'],
-            'seconds': round(reply['seconds'], 2),
-            **reply['usage'],
-        }
 
-        # The model declined the command, as Rule U or Rule A tells it to.
-        if code is None:
-            self.log.warning('the generator declined the command: %s', answer)
-            artifacts['explanation'] = context.write_text('rejection.txt', answer)
-            return self.result(
-                StageStatus.REJECTED,
-                summary='the generator declined the command',
-                detail={**detail, 'explanation': answer},
-                artifacts=artifacts)
+def as_module(code, payload):
+    """Wrap a generated function in a runnable module, for the record.
 
-        artifacts['behavior tree'] = context.write_text('bt.py', self._as_module(code, payload))
-        artifacts['function only'] = context.write_text('create_behavior_tree.py', code + '\n')
-
-        lines = code.count('\n') + 1
-        self.log.info('generated %d lines of behavior tree code', lines)
-        self.log.debug('generated code:\n%s', code)
-
-        return self.result(
-            StageStatus.PASSED,
-            summary=f'{lines} lines generated in {reply["seconds"]:.1f}s',
-            detail={**detail, 'lines': lines},
-            artifacts=artifacts)
-
-    @staticmethod
-    def _as_module(code, payload):
-        """Wrap the generated function in a runnable module, for the record.
-
-        The imports name the action nodes the simulator will provide later; nothing in
-        this phase of the pipeline imports this file, it is saved so the generated tree
-        can be read and run on its own once the executor exists.
-        """
-        header = (
-            f'# Scene:   {payload.get("scene")}\n'
-            f'# Command: {payload.get("command")}\n'
-            f'# Enriched: {payload.get("enriched_command") or "-"}\n'
-            f'# Model:   {payload.get("generation_model") or config.BT_GENERATION_MODEL}\n\n'
-            'import logging\n\n'
-            'import py_trees\n\n'
-            '# The action nodes are provided by the simulator side of the pipeline.\n'
-            'from bt_nodes import Place, Pour, Shake, Close\n\n\n')
-        return header + code + '\n'
+    The imports name the action nodes the simulator will provide later; nothing in the
+    pipeline imports this file, it is saved so an accepted tree can be read and run on
+    its own once the executor exists.
+    """
+    header = (
+        f'# Scene:    {payload.get("scene")}\n'
+        f'# Command:  {payload.get("command")}\n'
+        f'# Enriched: {payload.get("enriched_command") or "-"}\n'
+        f'# Model:    {payload.get("generation_model") or config.BT_GENERATION_MODEL}\n\n'
+        'import logging\n\n'
+        'import py_trees\n\n'
+        '# The action nodes are provided by the simulator side of the pipeline.\n'
+        'from bt_nodes import Place, Pour, Shake, Close\n\n\n')
+    return header + code + '\n'
