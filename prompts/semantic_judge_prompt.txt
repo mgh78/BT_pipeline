@@ -15,8 +15,6 @@ The user message contains:
   words to the names of the objects in the scene, for example "red container" to "red
   box". The tree's author worked from this version. The mapping is usually right, but it
   can be wrong.
-- CLARIFICATION (if present): questions the tree's author asked and the user's answers.
-  The answers are part of what the user wants.
 - BEHAVIOR TREE: the tree, as an outline.
 
 Robot and workspace
@@ -71,10 +69,14 @@ user asked for.
 4. Objects and locations: does every action use the object or location the user meant?
    Users often call objects by other names, such as "container" for a box or "block" for
    a cuboid; using the scene object the user plausibly meant is correct. Judge against
-   the original command and the user's answers. Use the rewritten command only as a
-   hint, because the mapping can be wrong.
+   the original command. Use the rewritten command only as a hint, because the mapping
+   can be wrong.
 5. Preconditions: is every physical fact above respected at the moment each action runs?
 6. Feasibility: can the robot carry out every action with these objects?
+7. Conditions: when the command states a condition about something the scene list
+   settles, such as "if the cube is green", check that exactly the objects that meet it
+   get the action and no others. The scene decides which those are, so a correct tree
+   simply contains the right actions; it does not test the condition while it runs.
 An action the user did not ask for is acceptable only when the request cannot be carried
 out safely without it, such as closing a container before shaking it. Any other added
 action that changes the scene is an error.
