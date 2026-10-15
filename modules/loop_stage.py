@@ -28,7 +28,7 @@ STATUS_TEXT = {
     'failed_judge_cap': 'the judge rejected every tree',
     'failed_syntax_cap': 'no tree passed the syntax check',
     'failed_clarification_cap': 'the generator kept asking questions',
-    'no_answer': 'the question was not answered',
+    'no_answer': 'the generator asked a question instead of writing a tree',
     'judge_error': 'the judge never returned a valid form',
     'error': 'the run stopped with an error',
 }
@@ -131,25 +131,24 @@ class GenerationLoopStage(Stage):
     def _clarification_source(self, payload):
         """Return ``ask_user(question)``.
 
-        The window supplies a callable that shows the question and waits. A scripted
-        run supplies a list of answers instead; when it runs out, nobody answers and
-        the run ends as ``no_answer``.
-        """
-        provider = payload.get('clarification_provider')
-        if callable(provider):
-            return provider
+        The pipeline runs on its own: nobody is waiting to answer a question, so a
+        ``CLARIFY:`` reply ends the run as ``no_answer`` and the question itself is the
+        result - it is kept in the attempt, in ``summary.json`` and in the window.
 
+        A run may still carry ``clarification_answers``, a list of answers decided
+        before it started. The loop tests use that to exercise the answered path.
+        """
         answers = list(payload.get('clarification_answers') or [])
         payload.setdefault('clarification_answers_used', [])
 
         def from_list(question):
-            self.log.info('clarification asked: %s', question)
+            self.log.info('the generator asked: %s', question)
             if not answers:
-                self.log.warning('nobody is there to answer the question')
+                self.log.info('no answer was provided for this run; stopping here')
                 return None
             answer = answers.pop(0)
             payload['clarification_answers_used'].append(answer)
-            self.log.info('scripted answer: %s', answer)
+            self.log.info('prepared answer: %s', answer)
             return answer
 
         return from_list
@@ -237,7 +236,8 @@ class GenerationLoopStage(Stage):
             question = attempt.get('question', '')
             answered = attempt.get('answer')
             return (f'asked: {question}'
-                    + (f'  →  answered: {answered}' if answered else '  →  unanswered'))
+                    + (f'  →  answered: {answered}' if answered
+                       else '  →  nothing answered, so the run stopped here'))
         if attempt.get('syntax_passed') is False:
             return 'tree written, syntax check failed'
         return f'tree written, syntax check passed, {form_summary(attempt.get("judge_form"))}'
