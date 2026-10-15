@@ -11,10 +11,13 @@ file before changing code.
 | `prompts/semantic_judge_prompt.txt` | New. The prompt of the semantic judge. |
 | `reference_loop.py` | Tested reference code: judgement form, message formats, and the loop with its caps. Adapt it to `core.pipeline`; keep its behaviour. |
 
-**In scope:** a new semantic judge stage (an LLM), a generator that only generates and
-asks questions, clarification answers from the user, repair loops, logging.
+**In scope:** a new semantic judge stage (an LLM), a generator that only generates,
+repair loops, logging.
 
 **Still out of scope:** planner, simulation, execution, a human judge, ASR input.
+
+**The system is fully autonomous.** No human is ever asked anything. The BT creator
+always builds a tree, and the judge is the only one who decides whether it is right.
 
 ---
 
@@ -34,7 +37,7 @@ From now on each part has one job:
 | Part | Does | Does not |
 |---|---|---|
 | Enrichment (unchanged) | Maps the user's words to the names of the objects in the scene, for example "red container" to "red box". | |
-| Generator (the BT creator) | Translates the command into a tree, exactly as asked. Asks the user when information is missing or the request cannot be expressed with the four actions. Repairs a tree when it gets errors or findings back. | Check whether the plan is safe, complete or in a valid order. |
+| Generator (the BT creator) | Translates the command into a tree, exactly as asked. Always returns a tree: an unclear command is read the most reasonable way, and a part none of the four actions can do is left out. Repairs a tree when it gets errors or findings back. | Ask the user anything. Check whether the plan is safe, complete or in a valid order. |
 | Syntax check | Checks that the code can run: syntax, structure, arguments, that every id exists and fits its argument. | Judge what the tree means. No physical rules. |
 | Semantic judge (new, LLM) | Decides with the judgement form whether the tree does what the user meant, in a physically valid way. | Write or fix trees. Judge names or code style. |
 
@@ -54,26 +57,23 @@ reached:
 
 | Event | What happens |
 |---|---|
-| Generator replies `CLARIFY: …` | Show the question to the user, add the question and answer to the conversation, call the generator again. |
+| Generator replies without a code block | Send it back with "Your reply contained no create_behavior_tree() code block. Return the tree." It counts as a syntax failure. |
 | Syntax check fails | Send the tree and the failed checks back to the generator. |
 | Judge rejects | Send the tree and the judge's form back to the generator. |
 | Judge accepts | Leave the loop. Draw the accepted tree. |
 
-**Caps** (all in `config.py`, all counted per run):
+**Caps** (both in `config.py`, both counted per run):
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `CLARIFICATION_LIMIT` | 2 | The generator may ask 2 questions. A 3rd question ends the run. |
-| `SYNTAX_FAILURE_LIMIT` | 3 | The run ends at the 3rd tree that fails the syntax check. |
+| `SYNTAX_FAILURE_LIMIT` | 3 | The run ends at the 3rd tree that fails the syntax check. A reply holding no code counts as one of them. |
 | `JUDGE_REJECTION_LIMIT` | 3 | The run ends at the 3rd rejected tree, so the judge sees at most 3 trees. This number comes from the study design. |
 | `JUDGE_FORMAT_RETRIES` | 2 | Extra judge calls when its reply is not a valid form. |
 
-Syntax failures do not count toward the judge cap, and clarifications count toward
-neither.
+Syntax failures do not count toward the judge cap.
 
 **Final status of a run:** `accepted`, `failed_judge_cap`, `failed_syntax_cap`,
-`failed_clarification_cap`, `no_answer` (a question was not answered), `judge_error`
-(no valid form after the retries), `error` (API or stage error).
+`judge_error` (no valid form after the retries), `error` (API or stage error).
 
 `run_generation_loop()` in `reference_loop.py` implements exactly this.
 
@@ -98,9 +98,9 @@ What the later stages receive:
 | Judge `ORIGINAL COMMAND:` | the typed command | the typed command |
 | Judge `REWRITTEN COMMAND:` | the rewritten command, if it differs from the typed one | left out |
 
-Enrichment is not repeated inside the loop, and clarification answers are not sent
-through it. The judge treats a mapped name as correct when it is the object the user
-meant: "red container" in the original and `red_box` in the tree is not an error.
+Enrichment is not repeated inside the loop. The judge treats a mapped name as correct
+when it is the object the user meant: "red container" in the original and `red_box` in
+the tree is not an error.
 
 ### 3.1 Generation prompt
 
@@ -117,8 +117,8 @@ Where the parts of the old prompt went:
 | Role, workspace, scene, the four actions | Generator, shortened. "The gripper starts closed" is removed: every action handles grasping itself. |
 | Object resolution rules | Generator. New rule: "two red cuboids" out of four identical ones means the two lowest indices. |
 | Tree structure rules, code requirements, output format | Generator, unchanged in substance. |
-| Rule U (unclear command) | Generator, as the clarifier. It replies with `CLARIFY:` and a question. |
-| Rule A (unsupported action) | Generator, as the clarifier. It says what cannot be done and asks the user to rephrase. |
+| Rule U (unclear command) | Generator, as "When the command is unclear": take the most reasonable reading and build the tree. |
+| Rule A (unsupported action) | Generator, same section: leave the impossible part out and build the rest. The judge decides whether that is acceptable. |
 | Close before shaking, fill before closing | Judge (physical facts). |
 | "Close before placing", "pour out before placing" | Dropped. They were default orders, not physical constraints. The generator now keeps the user's order. |
 | "No cap in the scene → Rule U" | Dropped. A Close without a cap to use is a missing argument, so the generator asks. |
@@ -135,21 +135,20 @@ All four code examples in the new prompt pass the current `tester.py`.
   there is something to fix. The prompt explains these sections to the model.
 - `COMMAND:` is the rewritten command when enrichment ran, otherwise the typed one, as
   today.
-- Read the reply with `parse_generator_reply()`. A code block is a tree. A reply that
-  starts with `CLARIFY:` is a question. Plain text without the marker also counts as a
-  question; log a format warning for it.
-- A question no longer ends the run with `REJECTED`. The run continues as described in
-  3.3.
+- Read the reply with `parse_generator_reply()`. A code block is a tree; anything else
+  is `no_code`.
+- A reply without a code block is a failed attempt, not a question. Send it back with
+  "Your reply contained no create_behavior_tree() code block. Return the tree." and
+  count it toward `SYNTAX_FAILURE_LIMIT`. There is no tree to attach, so the message
+  carries the demand alone.
 
-### 3.3 Clarification
+### 3.3 No questions
 
-- **Window:** show the question with a text field and a "Send answer" button. The run
-  waits. The answer continues the same run in the same run folder. A "Stop" button ends
-  the run as `no_answer`.
-- Add the question and answer to every later generator **and** judge message.
-- Do not send the answer through enrichment.
-- **Runs without the window** (scripts, tests): take answers from a list given with the
-  run. When the list is empty, end the run as `no_answer`.
+The generator never asks anything, and nothing in a run waits for a person. An unclear
+command is handled inside the generation prompt instead: take the most reasonable
+reading, use the lowest index among identical objects, choose a reasonable number when
+one is missing, and leave out a part that none of the four actions can do. Whether that
+reading was acceptable is the judge's decision.
 
 ### 3.4 Syntax check (`modules/tester.py`)
 
@@ -249,14 +248,13 @@ data/runs/<run id>/
 │   │   ├── judge/                 one folder per call: system_prompt · user_message · raw_reply
 │   │   └── judge_form.json
 │   └── 02/ ...
-├── clarifications.json
 └── summary.json                   plus everything the run folder holds today
 ```
 
 Add to `summary.json`:
 
-- the final status and every counter: generator calls, clarifications, syntax failures,
-  judge calls, judge rejections, judge format errors
+- the final status and every counter: generator calls, syntax failures, judge calls,
+  judge rejections, judge format errors
 - per attempt: whether it was code or a question, whether the syntax check passed, the
   judge form, and a field `ground_truth: null`. That field is filled in by hand
   (`"correct"` or `"faulty"`) until the simulation exists. Without it the judge cannot
@@ -274,7 +272,6 @@ JUDGE_MODEL = BT_GENERATION_MODEL     # may be a different model; always logged
 JUDGE_TEMPERATURE = 0                 # if the model rejects a temperature, omit it and log that
 JUDGE_SEND_SCENE_IMAGE = False        # keep equal to BT_GENERATION_SEND_SCENE_IMAGE
 JUDGE_USE_STRUCTURED_OUTPUT = True
-CLARIFICATION_LIMIT = 2
 SYNTAX_FAILURE_LIMIT = 3
 JUDGE_REJECTION_LIMIT = 3
 JUDGE_FORMAT_RETRIES = 2
@@ -285,8 +282,8 @@ JUDGE_FORMAT_RETRIES = 2
 | File | What is there now | What changes |
 |---|---|---|
 | `core/pipeline.py` | `Pipeline.run()` runs the stages in order and stops at the first `FAILED` or `REJECTED` stage (`TERMINAL`). | Scene, Command and Enrichment stay a straight sequence. Generator, syntax check and judge become the loop from section 2. |
-| `gui/app.py` | `run_pipeline()` builds the stage list, drops `enrichment` when the switch is off and marks it `SKIPPED`. The model dropdown sets `generation_model`. | Keep the switch logic. Add the clarification question and answer field, and show every attempt (tree, checks, judge form). Optional: a second dropdown for the judge model. |
-| `modules/generator.py` | `extract_code()`, and a `REJECTED` result when the reply is not code. | Keep `extract_code()`. The `REJECTED` branch becomes a clarification (3.2, 3.3). |
+| `gui/app.py` | `run_pipeline()` builds the stage list, drops `enrichment` when the switch is off and marks it `SKIPPED`. The model dropdown sets `generation_model`. | Keep the switch logic. Show every attempt (tree, checks, judge form) with an attempt selector, and add a second dropdown for the judge model. |
+| `modules/generator.py` | `extract_code()`, and a `REJECTED` result when the reply is not code. | Keep `extract_code()`. The `REJECTED` branch becomes a `no_code` attempt (3.2). |
 | `modules/tester.py` | `scene.spill` in `_check_scene()`, `structure.handler` in `_check_structure()`. | 3.4. |
 | `modules/llm.py` | `ask()` writes its artifacts under `tag`. | Add `response_format`. Pass per-attempt tags. |
 | `core/run_context.py` | `path()` creates missing folders. | Nothing. Nested tags such as `attempts/01/generation` already work. |
@@ -315,7 +312,7 @@ JUDGE_FORMAT_RETRIES = 2
 3. Change the tester (3.4).
 4. Add the judge stage (3.5).
 5. Replace the straight stage sequence with the loop (section 2, `run_generation_loop()`).
-6. Clarification in the window and for scripted runs (3.3).
+6. Make sure nothing waits for a person (3.3).
 7. Logging (3.6).
 8. Tests (section 6).
 
@@ -336,9 +333,8 @@ pass against the real pipeline:
 | Three rejected trees | `failed_judge_cap`, 3 generator calls, 3 rejections |
 | Tree with a wrong id, repaired | `accepted`, 1 syntax failure. The 2nd message contains `SYNTAX CHECK ERRORS:` and names the id |
 | Three trees that fail the syntax check | `failed_syntax_cap`, judge never called |
-| Question, answer, good tree | `accepted`, 1 clarification. The answer appears in the judge message |
-| Question without an answer | `no_answer` |
-| Three questions | `failed_clarification_cap` |
+| A text reply, then a good tree | `accepted`, 1 syntax failure. The 2nd message asks for the code block |
+| Three text replies | `failed_syntax_cap`, judge never called |
 | Invalid judge reply, then a valid accept | `accepted`, 2 judge calls, 1 format error |
 | Three invalid judge replies | `judge_error`, 3 judge calls |
 
@@ -357,10 +353,10 @@ enrichment **on**.
    times." Expected: the BT creator returns Shake without Close, the judge rejects with
    `missing_precondition`, and the repaired tree has Close first and is accepted. This
    proves that the validation moved from the BT creator to the judge.
-3. Same scene: "Shake the test tube a few times." Expected: a `CLARIFY:` question asking
-   how many times.
-4. Same scene: "Stir the liquid in the test tube." Expected: a `CLARIFY:` reply saying
-   that stirring is not possible.
+3. Same scene: "Shake the test tube a few times." Expected: a tree that shakes one test
+   tube a reasonable number of times, with no question asked.
+4. Same scene: "Stir the liquid in the test tube." Expected: stirring is left out. With
+   nothing else to do, the tree is empty or minimal, and the judge decides.
 5. **Cuboid scene, enrichment on:** "Put one red block into the green container on the
    right." Expected: the rewritten command uses the scene's names (cuboid, dark green
    crate), the tree places one red cuboid into `dark_green_crate_2`, and the judge
@@ -370,7 +366,6 @@ enrichment **on**.
 
 ## 7. Open points (defaults are set, all in `config.py`)
 
-- The caps for syntax failures (3) and clarifications (2). The judge cap (3) comes from
-  the study design.
+- The cap for syntax failures (3). The judge cap (3) comes from the study design.
 - Whether the judge uses the same model as the generator or a different one.
 - Whether both models should get the scene photo. If one gets it, the other must too.
