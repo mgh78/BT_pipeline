@@ -1,9 +1,10 @@
-"""The generation loop: generator, clarification, syntax check and semantic judge.
+"""The generation loop: generator, syntax check and semantic judge.
 
-Each part now has exactly one job. The generator translates the command and asks when
-something is missing; the syntax check decides whether the code can run; the judge
-decides whether the tree means what the user asked for. A tree that shakes an open test
-tube is no longer prevented - it is written, caught by the judge, and repaired.
+Nothing here waits for a person. The generator always returns a tree, taking the most
+reasonable reading of whatever it is given; the syntax check decides whether the code
+can run; the judge decides whether the tree means what the user asked for. A tree that
+shakes an open test tube is no longer prevented - it is written, caught by the judge,
+and repaired.
 
 This module holds the pieces that join them: the judgement form and its validation, the
 two message formats, the feedback texts, and :func:`run_generation_loop`, which runs the
@@ -51,9 +52,13 @@ RESPONSE_FORMAT = {
     'json_schema': {'name': 'judgement_form', 'strict': True, 'schema': JUDGE_SCHEMA},
 }
 
-# How a run can end.
+# How a run can end. Nobody is ever asked anything, so a run never waits.
 FINAL_STATUSES = ('accepted', 'failed_judge_cap', 'failed_syntax_cap',
-                  'failed_clarification_cap', 'no_answer', 'judge_error', 'error')
+                  'judge_error', 'error')
+
+# Sent back when the generator answered with prose instead of a tree.
+NO_CODE_PROBLEM = ('Your reply contained no create_behavior_tree() code block. '
+                   'Return the tree.')
 
 _FENCE = re.compile(r'^```(?:json)?\s*(.*?)\s*```$', re.DOTALL)
 
@@ -116,7 +121,7 @@ def outline_for_judge(node, depth=0):
     return f'{indent}{kind}({arguments}) [{node.name}]'
 
 
-def judge_message(original_command, rewritten_command, clarifications, outline):
+def judge_message(original_command, rewritten_command, outline):
     """The user message for one judge call.
 
     The judge is given the command the user typed, because the rewritten one was
@@ -125,10 +130,6 @@ def judge_message(original_command, rewritten_command, clarifications, outline):
     parts = [f'ORIGINAL COMMAND: {original_command}']
     if rewritten_command and rewritten_command.strip().lower() != original_command.strip().lower():
         parts.append(f'REWRITTEN COMMAND: {rewritten_command}')
-    if clarifications:
-        parts.append('CLARIFICATION:')
-        for question, answer in clarifications:
-            parts += [f'Q: {question}', f'A: {answer}']
     parts += ['BEHAVIOR TREE:', outline]
     return '\n'.join(parts)
 
@@ -136,33 +137,29 @@ def judge_message(original_command, rewritten_command, clarifications, outline):
 # --- What the generator is shown ----------------------------------------------
 
 def parse_generator_reply(answer, extract_code):
-    """Return ``('code', code)`` or ``('clarify', question)``.
+    """Return ``('code', code)`` or ``('no_code', text)``.
 
-    Code wins when the reply holds both. Plain text without the CLARIFY: marker is
-    still treated as a question; the caller logs a format warning for it.
+    The generator is told to answer with a tree and nothing else, so prose is a failed
+    attempt rather than a question: the caller sends it back and counts it toward the
+    syntax cap.
     """
     code = extract_code(answer)
     if code is not None:
         return 'code', code
-    text = answer.strip()
-    if text.upper().startswith('CLARIFY:'):
-        return 'clarify', text[len('CLARIFY:'):].strip()
-    return 'clarify', text
+    return 'no_code', answer.strip()
 
 
-def generator_message(command, clarifications=(), previous_code=None, problems=None):
+def generator_message(command, previous_code=None, problems=None):
     """The user message for one generator call.
 
-    ``problems`` is the text from :func:`syntax_problems` or :func:`reviewer_problems`
-    and belongs to ``previous_code``; both are left out on the first call.
+    ``problems`` is the text from :func:`syntax_problems`, :func:`reviewer_problems` or
+    :data:`NO_CODE_PROBLEM`. A tree comes with it whenever there was one to send back.
     """
     parts = [f'COMMAND: {command}']
-    if clarifications:
-        parts.append('CLARIFICATION:')
-        for question, answer in clarifications:
-            parts += [f'Q: {question}', f'A: {answer}']
     if previous_code:
-        parts += ['PREVIOUS TREE:', previous_code, problems]
+        parts += ['PREVIOUS TREE:', previous_code]
+    if problems:
+        parts.append(problems)
     return '\n'.join(parts)
 
 
@@ -187,9 +184,12 @@ def reviewer_problems(form):
 # --- The loop -----------------------------------------------------------------
 
 def run_generation_loop(command, original_command, rewritten_command,
-                        generate, syntax_check, judge, ask_user, extract_code,
+                        generate, syntax_check, judge, extract_code,
                         clock=None, on_update=None):
-    """Run generator, clarification, syntax check and judge until a tree is accepted.
+    """Run generator, syntax check and judge until a tree is accepted.
+
+    Nothing in here waits for a person: the generator always returns a tree, and the
+    judge is the only thing that decides whether it is right.
 
     Args:
         command: the text the generator works from - the rewritten command when
@@ -199,22 +199,21 @@ def run_generation_loop(command, original_command, rewritten_command,
         generate: ``generate(message, attempt) -> raw reply``.
         syntax_check: ``syntax_check(code, attempt) -> (passed, tree_or_None, checks)``.
         judge: ``judge(message, attempt, call) -> raw reply``.
-        ask_user: ``ask_user(question) -> answer`` or None when nobody answers.
-        extract_code: ``BTGenerationStage.extract_code``.
+        extract_code: ``BTGenerator.extract_code``.
         clock: time source, for tests.
         on_update: optional ``on_update(record, attempt)`` after every step, so the
             window can follow a run that is still going.
 
     Returns:
-        dict: the final status, every attempt, the clarifications, the counters and the
-        timestamps. The accepted tree, when there is one, is under ``accepted_tree``.
+        dict: the final status, every attempt, the counters and the timestamps. The
+        accepted tree, when there is one, is under ``accepted_tree``.
     """
     import time
 
     clock = clock or time.time
     record = {
-        'status': None, 'attempts': [], 'clarifications': [], 'accepted_tree': None,
-        'counts': {'generator_calls': 0, 'clarifications': 0, 'syntax_failures': 0,
+        'status': None, 'attempts': [], 'accepted_tree': None,
+        'counts': {'generator_calls': 0, 'syntax_failures': 0,
                    'judge_calls': 0, 'judge_rejections': 0, 'judge_format_errors': 0},
         'times': {'loop_started': clock(), 'first_valid_tree': None, 'accepted': None},
     }
@@ -236,8 +235,7 @@ def run_generation_loop(command, original_command, rewritten_command,
 
     previous_code = problems = None
     while True:
-        message = generator_message(command, record['clarifications'],
-                                    previous_code, problems)
+        message = generator_message(command, previous_code, problems)
         counts['generator_calls'] += 1
         attempt = {'n': counts['generator_calls'], 'generator_message': message,
                    'kind': None, 'syntax_passed': None, 'judge_form': None,
@@ -251,24 +249,18 @@ def run_generation_loop(command, original_command, rewritten_command,
         attempt['kind'] = kind
         notify(attempt)
 
-        # The generator asked a question instead of writing code.
-        if kind == 'clarify':
-            counts['clarifications'] += 1
-            attempt['question'] = body
-            attempt['format_warning'] = not reply.strip().upper().startswith('CLARIFY:')
-            if attempt['format_warning']:
-                log.warning('the generator asked a question without the CLARIFY: marker')
-            log.info('clarification %d: %s', counts['clarifications'], body)
-            if counts['clarifications'] > config.CLARIFICATION_LIMIT:
-                return finish('failed_clarification_cap')
+        # Prose instead of a tree. Ask for the tree again; it costs an attempt.
+        if kind == 'no_code':
+            counts['syntax_failures'] += 1
+            attempt['syntax_passed'] = False
+            attempt['syntax_errors'] = NO_CODE_PROBLEM
+            previous_code, problems = None, NO_CODE_PROBLEM
+            log.warning('the generator replied without a code block (%d of %d)',
+                        counts['syntax_failures'], config.SYNTAX_FAILURE_LIMIT)
             notify(attempt)
-            answer = ask_user(body)
-            if answer is None:
-                return finish('no_answer')
-            attempt['answer'] = answer
-            record['clarifications'].append((body, answer))
-            notify(attempt)
-            continue    # the previous tree and its problems, if any, are sent again
+            if counts['syntax_failures'] >= config.SYNTAX_FAILURE_LIMIT:
+                return finish('failed_syntax_cap')
+            continue
 
         # Syntax check.
         attempt['code'] = body
@@ -289,8 +281,7 @@ def run_generation_loop(command, original_command, rewritten_command,
 
         # Semantic judge. A fresh call for every tree: it never sees earlier verdicts.
         outline = outline_for_judge(tree)
-        judge_input = judge_message(original_command, rewritten_command,
-                                    record['clarifications'], outline)
+        judge_input = judge_message(original_command, rewritten_command, outline)
         attempt.update({'outline': outline, 'judge_message': judge_input,
                         'judge_replies': []})
         message_to_judge = judge_input
