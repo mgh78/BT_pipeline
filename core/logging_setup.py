@@ -35,7 +35,8 @@ import config
 ROOT_LOGGER_NAME = 'pipeline'
 
 # Every module that logs. Each one gets its own file inside a run directory.
-MODULES = ('pipeline', 'scene', 'command', 'enrichment', 'generator', 'tester', 'graph', 'gui')
+MODULES = ('pipeline', 'scene', 'command', 'enrichment', 'generator', 'tester',
+           'judge', 'loop', 'graph', 'gui')
 
 FILE_FORMAT = ('%(asctime)s | %(levelname)-8s | %(module_name)-10s | %(run_id)-24s | '
                '%(stage)-10s | %(filename)s:%(lineno)d | %(message)s')
