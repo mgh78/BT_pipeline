@@ -95,6 +95,31 @@ model's guess, so a wrong mapping is one of the faults the judge is there to cat
 its prompt tells it to judge against the original and treat the rewritten one as a hint.
 If the rewrite comes back unchanged, the line is left out.
 
+## The baseline: "Judge the tree" switched off
+
+The second switch under the command turns the judge off. That is the baseline the
+judged runs are compared against, so everything before the judge stays identical —
+same scene, same enrichment, same generation prompt, same syntax check.
+
+With the judge off there is **no loop at all**: there is nothing to repair towards, so
+the run is a single pass.
+
+| | Judge on | Judge off (baseline) |
+|---|---|---|
+| Generator calls | up to 3 | exactly 1 |
+| A tree that passes the syntax check | goes to the judge | **is the result** |
+| A rejected tree | sent back with the form | — |
+| A failed syntax check | sent back with the errors, up to 3 trees | ends the run |
+| Final status | `accepted`, `failed_judge_cap`, `failed_syntax_cap`, `judge_error` | `no_judge` or `failed_syntax_cap` |
+
+So a baseline run shows you what the BT creator produces on its own — including the
+faults the judge would have caught. A tree that shakes an open test tube is simply
+drawn and kept.
+
+`summary.json` records `loop.judge_enabled` for every run, so the two conditions can be
+told apart when the results are analysed. The default is [config.py](config.py)'s
+`JUDGE_ENABLED`; the switch overrides it per run.
+
 ## The judgement form
 
 The judge answers with JSON and nothing else, re-validated by `parse_judgement()` even
@@ -130,8 +155,9 @@ All in [config.py](config.py), counted per run:
 | `JUDGE_REJECTION_LIMIT` | 3 | The run ends at the 3rd rejected tree, so the judge sees at most three. From the study design. |
 | `JUDGE_FORMAT_RETRIES` | 2 | Extra judge calls when a reply is not a valid form. |
 
-A run ends as `accepted`, `failed_judge_cap`, `failed_syntax_cap`, `judge_error` or
-`error`. Syntax failures do not count toward the judge cap.
+A run ends as `accepted`, `no_judge` (the baseline), `failed_judge_cap`,
+`failed_syntax_cap`, `judge_error` or `error`. Syntax failures do not count toward the
+judge cap, and none of these caps apply to a baseline run, which is a single pass.
 
 ## The scene photo is not sent to the model
 
