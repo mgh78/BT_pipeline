@@ -62,6 +62,39 @@ A generator that shakes an open test tube because the command never mentioned a 
 the design: faults have to be able to reach the judge, so the generator is not allowed
 to prevent them.
 
+## What the "Enrich with the scene first" switch changes
+
+Enrichment runs once, before the loop, and rewrites your command so it names the
+objects that are actually in the scene — "the red container" becomes "the red box".
+It is a separate model call with its own prompt; what reaches the two stages after it
+is only the rewritten sentence.
+
+**For the generator, nothing is added.** Its system prompt is identical either way —
+the same generation prompt, the same scene object list. The command is *swapped*, not
+supplemented:
+
+```
+Enrichment off →  COMMAND: Put the yellow block in the red container.
+Enrichment on  →  COMMAND: Place the yellow cuboid in the red box.
+```
+
+The generator never learns that enrichment happened, or what you originally typed.
+
+**For the judge, one line is added.** It always receives `ORIGINAL COMMAND:` with your
+own words, and gains a second line when enrichment ran *and changed the text*:
+
+```
+ORIGINAL COMMAND:  Put the yellow block in the red container.
+REWRITTEN COMMAND: Place the yellow cuboid in the red box.
+BEHAVIOR TREE:
+...
+```
+
+The judge is the only part that sees both. That is deliberate: the rewrite is another
+model's guess, so a wrong mapping is one of the faults the judge is there to catch, and
+its prompt tells it to judge against the original and treat the rewritten one as a hint.
+If the rewrite comes back unchanged, the line is left out.
+
 ## The judgement form
 
 The judge answers with JSON and nothing else, re-validated by `parse_judgement()` even
