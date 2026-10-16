@@ -19,12 +19,13 @@ from modules.generator import BTGenerator, as_module
 from modules.judge import SemanticJudge, form_summary
 from modules.tester import SyntaxTestStage, spill_label
 
-# Which run status counts as a success for the stage's own state.
-SUCCESS = 'accepted'
+# Which run statuses count as a success for the stage's own state.
+SUCCESS = {'accepted', 'no_judge'}
 
 # What to tell the user for each way a run can end.
 STATUS_TEXT = {
     'accepted': 'the judge accepted the tree',
+    'no_judge': 'baseline run — the tree was not judged',
     'failed_judge_cap': 'the judge rejected every tree',
     'failed_syntax_cap': 'no tree passed the syntax check',
     'judge_error': 'the judge never returned a valid form',
@@ -52,9 +53,17 @@ class GenerationLoopStage(Stage):
         payload['generator_input'] = command
 
         generator = BTGenerator(model=payload.get('generation_model'))
-        judge = SemanticJudge(model=payload.get('judge_model'))
         tester = SyntaxTestStage()
         artifacts = {}
+
+        # With the judge switched off this is the baseline: generate once, check the
+        # code can run, draw it. Nothing judges the tree and nothing is repaired.
+        judge_enabled = payload.get('judge_enabled')
+        if judge_enabled is None:
+            judge_enabled = config.JUDGE_ENABLED
+        judge = SemanticJudge(model=payload.get('judge_model')) if judge_enabled else None
+        if not judge_enabled:
+            self.log.info('baseline run: the judge is switched off')
 
         # --- The four things the loop needs ---------------------------------
 
@@ -110,13 +119,14 @@ class GenerationLoopStage(Stage):
             rewritten_command=rewritten,
             generate=generate,
             syntax_check=syntax_check,
-            judge=ask_judge,
+            judge=ask_judge if judge_enabled else None,
             extract_code=generator.extract_code,
             on_update=on_update)
 
         payload['loop_record'] = record
         payload['generator'] = generator.describe()
-        payload['judge'] = judge.describe()
+        payload['judge'] = judge.describe() if judge else {'enabled': False}
+        payload['judge_enabled'] = bool(judge_enabled)
         result = self._report(context, payload, record, artifacts)
         payload['loop_summary'] = loop_summary(record, payload)
         return result
@@ -167,10 +177,11 @@ class GenerationLoopStage(Stage):
                           '' if attempt.get('judge_form') is None
                           else f', judge {form_summary(attempt["judge_form"])}')
 
-        summary = STATUS_TEXT.get(status, status)
-        if status == SUCCESS:
+        if status == 'accepted':
             summary = (f'accepted after {len(attempts)} attempt'
                        f'{"s" if len(attempts) != 1 else ""}')
+        elif status == 'no_judge':
+            summary = 'baseline — tree built, not judged'
         else:
             summary = f'{status} — {STATUS_TEXT.get(status, "")}'
 
@@ -181,24 +192,31 @@ class GenerationLoopStage(Stage):
             **{key.replace('_', ' '): value for key, value in counts.items()},
             'generator': f'{payload["generator"]["model"]} '
                          f'(temperature {payload["generator"]["temperature"]})',
-            'judge': f'{payload["judge"]["model"]} '
-                     f'(temperature {payload["judge"]["temperature"]}'
-                     f'{", structured output" if payload["judge"]["structured_output"] else ""})',
+            'judge': (f'{payload["judge"]["model"]} '
+                      f'(temperature {payload["judge"]["temperature"]}'
+                      f'{", structured output" if payload["judge"]["structured_output"] else ""})'
+                      if payload.get('judge_enabled')
+                      else 'switched off — this is a baseline run'),
         }
         for attempt in attempts:
-            detail[f'attempt {attempt["n"]}'] = self._attempt_line(attempt)
+            detail[f'attempt {attempt["n"]}'] = self._attempt_line(
+                attempt, payload.get('judge_enabled', True))
 
+        succeeded = status in SUCCESS
         return self.result(
-            StageStatus.PASSED if status == SUCCESS else StageStatus.FAILED,
+            StageStatus.PASSED if succeeded else StageStatus.FAILED,
             summary=summary, detail=detail, artifacts=artifacts,
-            error=None if status == SUCCESS else STATUS_TEXT.get(status, status))
+            error=None if succeeded else STATUS_TEXT.get(status, status))
 
     @staticmethod
-    def _attempt_line(attempt):
+    def _attempt_line(attempt, judged=True):
         if attempt['kind'] == 'no_code':
-            return 'no code in the reply, asked again'
+            return ('no code in the reply' if not judged
+                    else 'no code in the reply, asked again')
         if attempt.get('syntax_passed') is False:
             return 'tree written, syntax check failed'
+        if not judged:
+            return 'tree written, syntax check passed, not judged'
         return f'tree written, syntax check passed, {form_summary(attempt.get("judge_form"))}'
 
 
@@ -224,6 +242,7 @@ def loop_summary(record, payload):
             'on': bool(payload.get('enrichment_on')),
             **(payload.get('enrichment') or {}),
         },
+        'judge_enabled': bool(payload.get('judge_enabled')),
         'models': {'generator': payload.get('generator'), 'judge': payload.get('judge')},
         'caps': {
             'syntax_failure_limit': config.SYNTAX_FAILURE_LIMIT,
