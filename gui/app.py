@@ -34,6 +34,10 @@ from modules.scene import SceneStage, load_scene
 MONOSPACE = ('Menlo', 11) if os.name != 'nt' else ('Consolas', 11)
 SCENE_IMAGE_WIDTH = 380
 
+# The two conditions the pipeline can run in.
+JUDGE_MODE = 'Judge'
+BASELINE_MODE = 'Baseline'
+
 log = logging_setup.get_logger('gui')
 
 
@@ -195,12 +199,12 @@ class App(customtkinter.CTk):
         self.enrich_switch.select()
         self.enrich_switch.grid(row=0, column=0, sticky='w')
 
-        # Off is the baseline: generate once, check the code runs, draw it.
-        self.judge_switch = customtkinter.CTkSwitch(
-            switches, text='Judge the tree', font=('Arial', 11),
-            command=self.judging_changed)
-        self.judge_switch.select()
-        self.judge_switch.grid(row=1, column=0, sticky='w', pady=(6, 0))
+        # Judge: the loop repairs a rejected tree. Baseline: one tree, not judged.
+        self.mode_selector = customtkinter.CTkSegmentedButton(
+            switches, values=[JUDGE_MODE, BASELINE_MODE], font=('Arial', 11),
+            command=self.mode_changed)
+        self.mode_selector.set(JUDGE_MODE)
+        self.mode_selector.grid(row=1, column=0, sticky='w', pady=(8, 0))
 
         models = customtkinter.CTkFrame(box, fg_color='transparent')
         models.grid(row=2, column=1, padx=6, pady=(0, 12), sticky='e')
@@ -283,12 +287,15 @@ class App(customtkinter.CTk):
 
     # --- Running --------------------------------------------------------
 
-    def judging_changed(self):
-        """Grey out the judge model when there is no judge, and say what will happen."""
-        judging = bool(self.judge_switch.get())
-        self.judge_menu.configure(state='normal' if judging else 'disabled')
-        if judging:
-            self.status('The judge is on: a rejected tree is sent back for repair.')
+    @property
+    def judging(self):
+        return self.mode_selector.get() == JUDGE_MODE
+
+    def mode_changed(self, mode):
+        """Grey out the judge model in baseline, and say what the run will do."""
+        self.judge_menu.configure(state='normal' if self.judging else 'disabled')
+        if mode == JUDGE_MODE:
+            self.status('Judge: a rejected tree is sent back for repair, up to three.')
         else:
             self.status('Baseline: one tree, checked but not judged, and no repairs.',
                         warn=True)
@@ -329,7 +336,7 @@ class App(customtkinter.CTk):
             'generation_model': self.model_menu.get(),
             'judge_model': self.judge_menu.get(),
             'enrichment_on': 'enrichment' in selected,
-            'judge_enabled': bool(self.judge_switch.get()),
+            'judge_enabled': self.judging,
         }
         self.running = True
         self.run_button.configure(state='disabled', text='Running…')
