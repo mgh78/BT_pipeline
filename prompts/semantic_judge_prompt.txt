@@ -20,6 +20,8 @@ The user message contains:
 Robot and workspace
 The robot is an arm with a gripper, working at a table. Each action is high-level and
 handles approaching, grasping, moving and releasing by itself.
+Objects that hold or support other objects (boxes, crates, bowls, palettes, racks, tube
+holders) are fixed in place: they cannot be grasped or moved.
 Positions are in metres. A higher y is further to the right, a lower y further to the
 left. A higher x is further from the robot base. z is the height above the table.
 
@@ -39,14 +41,6 @@ What each action does when it runs:
   container that can be closed and closing_obj is a cap or lid in the scene. One cap
   closes one container.
 
-Physical facts
-- A container that holds liquid spills when it is shaken while open, so it must be
-  closed before it is shaken.
-- Nothing can be poured into a closed container, so a container must be filled before it
-  is closed.
-- Objects that hold or support other objects (boxes, crates, bowls, palettes, racks, tube
-  holders) are fixed: they cannot be grasped or moved.
-
 How to read the tree
 One node per line, children indented under their parent.
 - "Sequence" runs its children from top to bottom and stops as soon as one fails.
@@ -54,32 +48,39 @@ One node per line, children indented under their parent.
   children are fallbacks.
 - An action line gives the action type and its arguments, then the node's name in
   brackets.
+The tree contains no condition nodes: it cannot test anything while it runs, and
+everything it does is one of the four actions.
 Judge each action by its type and arguments. Node names are labels written by the tree's
 author and can be wrong.
 
 What to check
 Work out what the scene looks like after the tree has run, and compare it with what the
-user asked for.
+user asked for. If the tree contains a Selector, treat its first child as the normal
+outcome and each later child as what happens when the earlier ones fail; every branch
+must be acceptable.
 1. Goal: is everything the user asked for done, for the objects and places the user
    meant?
 2. Actions: is every requested action there, including one action per object when the
    user refers to several objects?
-3. Order: can the actions run in this order? Keep to the user's order unless it breaks a
-   physical fact.
+3. Order: can the actions run in this order? Keep to the user's order unless that order
+   cannot work.
 4. Objects and locations: does every action use the object or location the user meant?
    Users often call objects by other names, such as "container" for a box or "block" for
    a cuboid; using the scene object the user plausibly meant is correct. Judge against
    the original command. Use the rewritten command only as a hint, because the mapping
    can be wrong.
-5. Preconditions: is every physical fact above respected at the moment each action runs?
-6. Feasibility: can the robot carry out every action with these objects?
+5. Preconditions: when each action runs, is everything it needs already in place? A
+   missing precondition or check means that an action which has to come first is
+   missing.
+6. Feasibility: can the robot carry out every action with these objects? If the command
+   asks for something none of the four actions can do, the task is not feasible, even
+   when the tree leaves that part out.
 7. Conditions: when the command states a condition about something the scene list
    settles, such as "if the cube is green", check that exactly the objects that meet it
    get the action and no others. The scene decides which those are, so a correct tree
    simply contains the right actions; it does not test the condition while it runs.
 An action the user did not ask for is acceptable only when the request cannot be carried
-out safely without it, such as closing a container before shaking it. Any other added
-action that changes the scene is an error.
+out safely without it. Any other added action that changes the scene is an error.
 If the command can be read in several reasonable ways and the tree follows one of them,
 do not reject the tree for that.
 Do not judge node names, variable names, comments or code style, and do not rewrite the
@@ -101,56 +102,3 @@ these codes:
   "not_feasible"               The task is not feasible for the robot
 reason: if you reject, one sentence that explains the problem and names the node and
 objects involved; if you accept, an empty string.
-
-Examples
-The objects in these examples are made up; they do not appear in the real scenes.
-
-Example 1 - reject.
-Scene:
-- transparent_vial: vial, transparent, contains blue liquid (40% full), graspable, position x=0.480 y=-0.050 z=0.040
-- black_vial_cap: vial cap, black, graspable, position x=0.420 y=0.120 z=0.010
-- grey_rack: rack, grey, valid location, position x=0.600 y=0.150 z=0.030
-User message:
-ORIGINAL COMMAND: Shake the vial two times and put it in the grey rack.
-BEHAVIOR TREE:
-Sequence [Root]
-    Shake(obj="transparent_vial", times=2) [ShakeVialTwoTimes]
-    Place(obj="transparent_vial", location="grey_rack") [PlaceVialInGreyRack]
-Answer:
-{"verdict": "reject", "errors": ["missing_precondition"], "reason": "ShakeVialTwoTimes shakes transparent_vial while it is open and holds liquid, so the liquid will spill; close it with black_vial_cap first."}
-
-Example 2 - accept.
-Scene and command as in Example 1.
-BEHAVIOR TREE:
-Sequence [Root]
-    Close(obj="transparent_vial", closing_obj="black_vial_cap") [CloseVialWithBlackCap]
-    Shake(obj="transparent_vial", times=2) [ShakeVialTwoTimes]
-    Place(obj="transparent_vial", location="grey_rack") [PlaceVialInGreyRack]
-Answer:
-{"verdict": "accept", "errors": [], "reason": ""}
-
-Example 3 - the rewritten command was wrong.
-Scene:
-- blue_cube_1: cube, blue, graspable, position x=0.400 y=-0.100 z=0.025
-- blue_cube_2: cube, blue, graspable, position x=0.400 y=0.000 z=0.025
-- blue_cube_3: cube, blue, graspable, position x=0.400 y=0.100 z=0.025
-- orange_box: box, orange, valid location, position x=0.650 y=0.050 z=0.030
-User message:
-ORIGINAL COMMAND: Put the left blue cube in the orange box.
-REWRITTEN COMMAND: Place blue cube 3 in the orange box.
-BEHAVIOR TREE:
-Sequence [Root]
-    Place(obj="blue_cube_3", location="orange_box") [PlaceBlueCube3InOrangeBox]
-Answer:
-{"verdict": "reject", "errors": ["wrong_object_or_location"], "reason": "PlaceBlueCube3InOrangeBox moves blue_cube_3, the rightmost cube (y=0.100), but the user asked for the left one, blue_cube_1 (y=-0.100)."}
-
-Example 4 - a different word for the same object.
-Scene: as in Example 3.
-User message:
-ORIGINAL COMMAND: Put the left block in the orange container.
-REWRITTEN COMMAND: Place blue cube 1 in the orange box.
-BEHAVIOR TREE:
-Sequence [Root]
-    Place(obj="blue_cube_1", location="orange_box") [PlaceBlueCube1InOrangeBox]
-Answer:
-{"verdict": "accept", "errors": [], "reason": ""}
