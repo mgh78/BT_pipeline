@@ -66,6 +66,12 @@ JUDGE_TEMPERATURE = 0           # dropped automatically for a model that refuses
 JUDGE_SEND_SCENE_IMAGE = False  # keep equal to BT_GENERATION_SEND_SCENE_IMAGE
 JUDGE_USE_STRUCTURED_OUTPUT = True
 
+# Turning the judge off gives the baseline: the pipeline runs exactly as it does with
+# the judge, up to the point where the judge would decide, and the first tree that
+# passes the syntax check is the result. That is the condition the judged runs are
+# compared against, so nothing else about the run may differ.
+JUDGE_ENABLED = True
+
 # Models the GUI offers in its dropdowns.
 AVAILABLE_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-5']
 
