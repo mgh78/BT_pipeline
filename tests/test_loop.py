@@ -93,12 +93,13 @@ def run(monkeypatch, tmp_path):
     """Run the real pipeline with scripted replies, in a throwaway run folder."""
     monkeypatch.setattr(config, 'RUNS_DIR', tmp_path / 'runs')
 
-    def go(generator_replies, judge_replies=()):
+    def go(generator_replies, judge_replies=(), judge_enabled=True):
         scripted = Scripted(generator_replies, judge_replies)
         monkeypatch.setattr(llm, 'ask', scripted)
         pipeline = Pipeline([SceneStage(), CommandStage(), GenerationLoopStage()])
         context = RunContext(scene=SCENE)
-        payload = {'scene': SCENE, 'command': COMMAND}
+        payload = {'scene': SCENE, 'command': COMMAND,
+                   'judge_enabled': judge_enabled}
         pipeline.run(context, payload)
         return payload['loop_record'], scripted, context
 
@@ -191,6 +192,33 @@ def test_three_invalid_forms_end_the_run(run):
     assert record['status'] == 'judge_error'
     assert record['counts']['judge_calls'] == 3
     assert record['accepted_tree'] is None
+
+
+# --- the baseline: no judge, no loop -----------------------------------------
+
+def test_baseline_keeps_the_first_tree_unjudged(run):
+    # The tree shakes an open tube, which the judge would reject. Nothing judges it.
+    record, scripted, _ = run([TREE_WITHOUT_CLOSE], judge_enabled=False)
+    assert record['status'] == 'no_judge'
+    assert record['counts']['generator_calls'] == 1
+    assert record['counts']['judge_calls'] == 0
+    assert not scripted.messages('judge')
+    assert record['accepted_tree'] is not None
+    assert record['attempts'][0]['judge_form'] is None
+
+
+def test_baseline_does_not_repair_a_syntax_failure(run):
+    record, scripted, _ = run([TREE_WITH_WRONG_ID], judge_enabled=False)
+    assert record['status'] == 'failed_syntax_cap'
+    # One attempt only: with no judge there is nothing to repair towards.
+    assert record['counts']['generator_calls'] == 1
+    assert record['counts']['syntax_failures'] == 1
+
+
+def test_baseline_does_not_ask_again_for_missing_code(run):
+    record, _, _ = run([NO_CODE], judge_enabled=False)
+    assert record['status'] == 'failed_syntax_cap'
+    assert record['counts']['generator_calls'] == 1
 
 
 # --- what the run leaves behind ----------------------------------------------
