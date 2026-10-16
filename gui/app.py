@@ -116,6 +116,7 @@ class App(customtkinter.CTk):
         self.running = False
         self._attempts = []        # the attempts of the run on screen
         self._payload_png = None   # the saved image of the accepted tree
+        self._judged = True        # False when the run on screen was a baseline
 
         self.grid_columnconfigure(0, weight=0, minsize=420)
         self.grid_columnconfigure(1, weight=3, minsize=480)
@@ -186,10 +187,20 @@ class App(customtkinter.CTk):
         self.command_box.grid(row=1, column=0, columnspan=3, padx=14, pady=(0, 8),
                               sticky='ew')
 
+        switches = customtkinter.CTkFrame(box, fg_color='transparent')
+        switches.grid(row=2, column=0, padx=14, pady=(0, 12), sticky='w')
+
         self.enrich_switch = customtkinter.CTkSwitch(
-            box, text='Enrich with the scene first', font=('Arial', 11))
+            switches, text='Enrich with the scene first', font=('Arial', 11))
         self.enrich_switch.select()
-        self.enrich_switch.grid(row=2, column=0, padx=14, pady=(0, 12), sticky='w')
+        self.enrich_switch.grid(row=0, column=0, sticky='w')
+
+        # Off is the baseline: generate once, check the code runs, draw it.
+        self.judge_switch = customtkinter.CTkSwitch(
+            switches, text='Judge the tree', font=('Arial', 11),
+            command=self.judging_changed)
+        self.judge_switch.select()
+        self.judge_switch.grid(row=1, column=0, sticky='w', pady=(6, 0))
 
         models = customtkinter.CTkFrame(box, fg_color='transparent')
         models.grid(row=2, column=1, padx=6, pady=(0, 12), sticky='e')
@@ -272,6 +283,16 @@ class App(customtkinter.CTk):
 
     # --- Running --------------------------------------------------------
 
+    def judging_changed(self):
+        """Grey out the judge model when there is no judge, and say what will happen."""
+        judging = bool(self.judge_switch.get())
+        self.judge_menu.configure(state='normal' if judging else 'disabled')
+        if judging:
+            self.status('The judge is on: a rejected tree is sent back for repair.')
+        else:
+            self.status('Baseline: one tree, checked but not judged, and no repairs.',
+                        warn=True)
+
     def _scene_changed(self, scene_number):
         self.status(f'Scene {scene_number} loaded. Type a command and run the pipeline.')
 
@@ -308,6 +329,7 @@ class App(customtkinter.CTk):
             'generation_model': self.model_menu.get(),
             'judge_model': self.judge_menu.get(),
             'enrichment_on': 'enrichment' in selected,
+            'judge_enabled': bool(self.judge_switch.get()),
         }
         self.running = True
         self.run_button.configure(state='disabled', text='Running…')
@@ -352,6 +374,9 @@ class App(customtkinter.CTk):
                         f'{results[failed[0]].summary}', error=True)
             if failed[0] == 'loop' and record.get('status') == 'failed_syntax_cap':
                 self.tabs.set('Checks')
+        elif record.get('status') == 'no_judge':
+            self.status(f'Baseline: the tree was built and checked, but nothing judged '
+                        f'it. Everything is in {self.context.directory.name}.')
         else:
             attempts = len(record.get('attempts', []))
             self.status(f'Accepted after {attempts} attempt'
@@ -365,6 +390,7 @@ class App(customtkinter.CTk):
         record = payload.get('loop_record') or {}
         self._attempts = list(record.get('attempts', []))
         self._payload_png = payload.get('graph_png')
+        self._judged = record.get('status') != 'no_judge'
 
         if not self._attempts:
             self.attempt_menu.configure(values=['—'], state='disabled')
@@ -388,7 +414,7 @@ class App(customtkinter.CTk):
             return f'{n} · syntax failed'
         form = attempt.get('judge_form')
         if form is None:
-            return f'{n} · no judgement'
+            return f'{n} · not judged' if not self._judged else f'{n} · no judgement'
         return f'{n} · judge {form["verdict"]}ed'
 
     def show_attempt(self, label):
@@ -410,7 +436,7 @@ class App(customtkinter.CTk):
 
         self._set_code(attempt.get('code') or '')
         self.check_table.show(attempt.get('checks', []))
-        self._set_judge(self._judgement_text(attempt))
+        self._set_judge(self._judgement_text(attempt, self._judged))
 
         tree = attempt.get('tree')
         if tree is not None:
@@ -429,11 +455,15 @@ class App(customtkinter.CTk):
             self.tabs.set('Checks')
 
     @staticmethod
-    def _judgement_text(attempt):
+    def _judgement_text(attempt, judged=True):
         form = attempt.get('judge_form')
         lines = []
         if form is None:
-            if attempt.get('syntax_passed') is False:
+            if not judged:
+                lines.append('Baseline run: the judge was switched off, so this tree '
+                             'was built and checked but nothing decided whether it is '
+                             'right.')
+            elif attempt.get('syntax_passed') is False:
                 lines.append('The syntax check failed, so the judge was never asked.')
             else:
                 lines.append('The judge did not return a valid judgement form.')
@@ -471,9 +501,11 @@ class App(customtkinter.CTk):
         of each attempt. The built trees are not stored, so the graph of a past run
         comes from bt_graph.json - the accepted tree only.
         """
-        stored = ((summary.get('loop') or {}).get('attempts') or [])
+        loop_summary = summary.get('loop') or {}
+        stored = loop_summary.get('attempts') or []
         self._attempts = []
         self._payload_png = directory / 'bt_graph.png'
+        self._judged = loop_summary.get('status') != 'no_judge'
 
         for entry in stored:
             folder = directory / 'attempts' / f'{entry["n"]:02d}'
