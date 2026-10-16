@@ -145,6 +145,54 @@ The six error codes, each shown to the generator as the form's own sentence:
 An accept carrying errors, or a reject with no error or no reason, is refused and the
 judge is asked again. **A judge that fails is never treated as an accept.**
 
+## What the generator is told when a tree comes back
+
+**The system prompt never changes.** On every attempt the generator gets the identical
+generation prompt plus the scene object list — nothing is ever appended to it. All the
+feedback goes into the **user message**, which grows from one line to four sections:
+
+```
+COMMAND: shake the left test tube 3 times
+PREVIOUS TREE:
+def create_behavior_tree():
+    try:
+        root = py_trees.composites.Sequence(name="Root", memory=True)
+        shake_1 = Shake(name="ShakeTransparentTestTube1", obj="transparent_test_tube_1", times=3)
+
+        root.add_children([shake_1])
+
+        return root
+    except Exception as e:
+        logging.error(f"Error in create_behavior_tree: {e}")
+REVIEWER FINDINGS:
+Problems: A necessary precondition or check is missing.
+Reason: ShakeTransparentTestTube1 shakes transparent_test_tube_1 while it is open and holds liquid, so the liquid will spill; it must be closed with a cap first.
+```
+
+| Part | Where it comes from |
+|---|---|
+| `COMMAND:` | the same every attempt — the enriched command, or the typed one |
+| `PREVIOUS TREE:` | the exact code of the tree that was sent back |
+| `Problems:` | the judge's error codes, written as the judgement form's own sentences — `missing_precondition` becomes "A necessary precondition or check is missing" |
+| `Reason:` | the judge's one sentence, verbatim |
+
+So the generator learns *which category* is wrong and *why*, in the judge's words. It
+never sees the raw codes, the JSON, or the judge's prompt.
+
+A failed syntax check uses the same shape, with `SYNTAX CHECK ERRORS:` in place of
+`REVIEWER FINDINGS:` and each blocking check listed with its line number. A reply that
+held no code at all has no tree to send back, so it gets the demand alone:
+
+```
+COMMAND: shake the left test tube 3 times
+Your reply contained no create_behavior_tree() code block. Return the tree.
+```
+
+**Only the last tree is sent.** On the third attempt the generator sees the second
+tree and the second set of findings — not the whole history. There is no accumulating
+conversation, and the generation prompt's "Follow-up messages" section tells the model
+to expect either kind of feedback.
+
 ## The caps, and how a run ends
 
 All in [config.py](config.py), counted per run:
