@@ -53,7 +53,9 @@ RESPONSE_FORMAT = {
 }
 
 # How a run can end. Nobody is ever asked anything, so a run never waits.
-FINAL_STATUSES = ('accepted', 'failed_judge_cap', 'failed_syntax_cap',
+# 'no_judge' is the baseline: the judge was switched off, so the first tree that
+# passes the syntax check is the result and nothing judged it.
+FINAL_STATUSES = ('accepted', 'no_judge', 'failed_judge_cap', 'failed_syntax_cap',
                   'judge_error', 'error')
 
 # Sent back when the generator answered with prose instead of a tree.
@@ -198,7 +200,8 @@ def run_generation_loop(command, original_command, rewritten_command,
         rewritten_command: the enriched command, or None.
         generate: ``generate(message, attempt) -> raw reply``.
         syntax_check: ``syntax_check(code, attempt) -> (passed, tree_or_None, checks)``.
-        judge: ``judge(message, attempt, call) -> raw reply``.
+        judge: ``judge(message, attempt, call) -> raw reply``, or None for the
+            baseline, where the first tree that passes the syntax check is kept.
         extract_code: ``BTGenerator.extract_code``.
         clock: time source, for tests.
         on_update: optional ``on_update(record, attempt)`` after every step, so the
@@ -278,6 +281,15 @@ def run_generation_loop(command, original_command, rewritten_command,
             continue
         if record['times']['first_valid_tree'] is None:
             record['times']['first_valid_tree'] = clock()
+
+        # Baseline: with no judge, the first tree that can run is the result. The run
+        # is identical up to here, so the two conditions differ only in the judge.
+        if judge is None:
+            attempt['outline'] = outline_for_judge(tree)
+            record['accepted_tree'] = tree
+            record['times']['accepted'] = clock()
+            log.info('no judge in this run; keeping the first tree that passes')
+            return finish('no_judge')
 
         # Semantic judge. A fresh call for every tree: it never sees earlier verdicts.
         outline = outline_for_judge(tree)
