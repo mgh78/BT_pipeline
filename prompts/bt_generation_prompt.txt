@@ -97,147 +97,26 @@ The user message always starts with COMMAND:. It may continue with:
 Output
 Always exactly one ```python code block containing create_behavior_tree() and nothing
 else. No text before or after it.
+Example
+The objects in this example are made up; they do not appear in the real scenes.
 
-Examples
-The objects in these examples are made up; they do not appear in the real scenes.
-
-Example 1 - build exactly what was asked.
 Scene:
-- transparent_vial: vial, transparent, contains blue liquid (40% full), graspable, position x=0.480 y=-0.050 z=0.040
-- black_vial_cap: vial cap, black, graspable, position x=0.420 y=0.120 z=0.010
-- grey_rack: rack, grey, valid location, position x=0.600 y=0.150 z=0.030
+- blue_cube: cube, blue, graspable, position x=0.400 y=-0.100 z=0.025
+- yellow_ball: ball, yellow, graspable, position x=0.450 y=0.050 z=0.030
+- orange_box: box, orange, valid location, position x=0.650 y=-0.150 z=0.030
+- green_bin: bin, green, valid location, position x=0.600 y=0.200 z=0.030
 User message:
-COMMAND: Shake the vial two times and put it in the grey rack.
+COMMAND: Put the blue cube in the orange box, then put the yellow ball in the green bin.
 Reply:
 ```python
 def create_behavior_tree():
     try:
         root = py_trees.composites.Sequence(name="Root", memory=True)
-        shake_1 = Shake(name="ShakeVialTwoTimes", obj="transparent_vial", times=2)
-        place_1 = Place(name="PlaceVialInGreyRack", obj="transparent_vial", location="grey_rack")
-
-        root.add_children([shake_1, place_1])
-
-        return root
-    except Exception as e:
-        logging.error(f"Error in create_behavior_tree: {e}")
-```
-The user did not ask to close the vial, so no Close is added. Whether shaking an open
-vial is safe is for the reviewer to decide.
-
-Example 2 - the reviewer sends the tree back.
-Scene: as in Example 1.
-User message:
-COMMAND: Shake the vial two times and put it in the grey rack.
-PREVIOUS TREE:
-(the tree from Example 1)
-REVIEWER FINDINGS:
-Problems: A necessary precondition or check is missing.
-Reason: ShakeVialTwoTimes shakes transparent_vial while it is open and holds liquid, so the liquid will spill; close it with black_vial_cap first.
-Reply:
-```python
-def create_behavior_tree():
-    try:
-        root = py_trees.composites.Sequence(name="Root", memory=True)
-        close_1 = Close(name="CloseVialWithBlackCap", obj="transparent_vial", closing_obj="black_vial_cap")
-        shake_1 = Shake(name="ShakeVialTwoTimes", obj="transparent_vial", times=2)
-        place_1 = Place(name="PlaceVialInGreyRack", obj="transparent_vial", location="grey_rack")
-
-        root.add_children([close_1, shake_1, place_1])
-
-        return root
-    except Exception as e:
-        logging.error(f"Error in create_behavior_tree: {e}")
-```
-
-Example 3 - a number of identical objects.
-Scene:
-- blue_cube_1: cube, blue, graspable, position x=0.400 y=-0.100 z=0.025
-- blue_cube_2: cube, blue, graspable, position x=0.400 y=0.000 z=0.025
-- blue_cube_3: cube, blue, graspable, position x=0.400 y=0.100 z=0.025
-- orange_box: box, orange, valid location, position x=0.650 y=0.050 z=0.030
-User message:
-COMMAND: Put two blue cubes in the orange box.
-Reply:
-```python
-def create_behavior_tree():
-    try:
-        root = py_trees.composites.Sequence(name="Root", memory=True)
-        place_1 = Place(name="PlaceBlueCube1InOrangeBox", obj="blue_cube_1", location="orange_box")
-        place_2 = Place(name="PlaceBlueCube2InOrangeBox", obj="blue_cube_2", location="orange_box")
+        place_1 = Place(name="PlaceBlueCubeInOrangeBox", obj="blue_cube", location="orange_box")
+        place_2 = Place(name="PlaceYellowBallInGreenBin", obj="yellow_ball", location="green_bin")
 
         root.add_children([place_1, place_2])
 
         return root
     except Exception as e:
         logging.error(f"Error in create_behavior_tree: {e}")
-```
-
-Example 4 - a fallback.
-Scene:
-- transparent_flask_1: flask, transparent, contains blue liquid (50% full), graspable, position x=0.600 y=-0.080 z=0.060
-- transparent_flask_2: flask, transparent, contains green liquid (50% full), graspable, position x=0.600 y=0.000 z=0.060
-- white_basin: basin, white, valid location, position x=0.450 y=0.200 z=0.020
-User message:
-COMMAND: Pour the blue liquid into the white basin, and if you cannot, pour the green one instead.
-Reply:
-```python
-def create_behavior_tree():
-    try:
-        root = py_trees.composites.Sequence(name="Root", memory=True)
-        pour_selector = py_trees.composites.Selector(name="PourBlueOrGreenIntoBasin", memory=True)
-        pour_1 = Pour(name="PourBlueFlaskIntoWhiteBasin", source="transparent_flask_1", target="white_basin")
-        pour_2 = Pour(name="PourGreenFlaskIntoWhiteBasin", source="transparent_flask_2", target="white_basin")
-
-        pour_selector.add_children([pour_1, pour_2])
-        root.add_children([pour_selector])
-
-        return root
-    except Exception as e:
-        logging.error(f"Error in create_behavior_tree: {e}")
-```
-
-Example 5 - a condition decided from the scene.
-Scene:
-- blue_cube_1: cube, blue, graspable, position x=0.400 y=-0.100 z=0.025
-- green_cube_1: cube, green, graspable, position x=0.400 y=0.000 z=0.025
-- blue_cube_2: cube, blue, graspable, position x=0.400 y=0.100 z=0.025
-- orange_box: box, orange, valid location, position x=0.650 y=0.050 z=0.030
-User message:
-COMMAND: If a cube is blue, put it in the orange box; otherwise go to the next cube.
-Reply:
-```python
-def create_behavior_tree():
-    try:
-        root = py_trees.composites.Sequence(name="Root", memory=True)
-        place_1 = Place(name="PlaceBlueCube1InOrangeBox", obj="blue_cube_1", location="orange_box")
-        place_2 = Place(name="PlaceBlueCube2InOrangeBox", obj="blue_cube_2", location="orange_box")
-
-        root.add_children([place_1, place_2])
-
-        return root
-    except Exception as e:
-        logging.error(f"Error in create_behavior_tree: {e}")
-```
-The scene says which cubes are blue, so the condition is settled here: only the two blue
-cubes get a Place, and green_cube_1 gets nothing. No Selector is used.
-
-Example 6 - a part the robot cannot do.
-Scene: as in Example 1.
-User message:
-COMMAND: Heat the vial and then put it in the grey rack.
-Reply:
-```python
-def create_behavior_tree():
-    try:
-        root = py_trees.composites.Sequence(name="Root", memory=True)
-        place_1 = Place(name="PlaceVialInGreyRack", obj="transparent_vial", location="grey_rack")
-
-        root.add_children([place_1])
-
-        return root
-    except Exception as e:
-        logging.error(f"Error in create_behavior_tree: {e}")
-```
-None of the four actions can heat anything, so that part is left out and the rest is
-built. Whether the tree is still acceptable is for the reviewer to decide.
