@@ -193,6 +193,9 @@ def run_generation_loop(command, original_command, rewritten_command,
     Nothing in here waits for a person: the generator always returns a tree, and the
     judge is the only thing that decides whether it is right.
 
+    Without a judge (``judge=None``) this is the baseline and there is no loop at all:
+    one generator call, one syntax check, and the tree that came out.
+
     Args:
         command: the text the generator works from - the rewritten command when
             enrichment ran, otherwise the typed one.
@@ -201,7 +204,9 @@ def run_generation_loop(command, original_command, rewritten_command,
         generate: ``generate(message, attempt) -> raw reply``.
         syntax_check: ``syntax_check(code, attempt) -> (passed, tree_or_None, checks)``.
         judge: ``judge(message, attempt, call) -> raw reply``, or None for the
-            baseline, where the first tree that passes the syntax check is kept.
+            baseline. With no judge there is nothing to repair towards, so the
+            baseline is a single pass: one generator call, one syntax check, and
+            whatever came out.
         extract_code: ``BTGenerator.extract_code``.
         clock: time source, for tests.
         on_update: optional ``on_update(record, attempt)`` after every step, so the
@@ -261,7 +266,8 @@ def run_generation_loop(command, original_command, rewritten_command,
             log.warning('the generator replied without a code block (%d of %d)',
                         counts['syntax_failures'], config.SYNTAX_FAILURE_LIMIT)
             notify(attempt)
-            if counts['syntax_failures'] >= config.SYNTAX_FAILURE_LIMIT:
+            # The baseline has nothing to repair towards, so it does not try again.
+            if judge is None or counts['syntax_failures'] >= config.SYNTAX_FAILURE_LIMIT:
                 return finish('failed_syntax_cap')
             continue
 
@@ -276,19 +282,19 @@ def run_generation_loop(command, original_command, rewritten_command,
             attempt['syntax_errors'] = problems
             log.info('syntax failure %d of %d',
                      counts['syntax_failures'], config.SYNTAX_FAILURE_LIMIT)
-            if counts['syntax_failures'] >= config.SYNTAX_FAILURE_LIMIT:
+            if judge is None or counts['syntax_failures'] >= config.SYNTAX_FAILURE_LIMIT:
                 return finish('failed_syntax_cap')
             continue
         if record['times']['first_valid_tree'] is None:
             record['times']['first_valid_tree'] = clock()
 
-        # Baseline: with no judge, the first tree that can run is the result. The run
-        # is identical up to here, so the two conditions differ only in the judge.
+        # Baseline: no judge, so nothing decides whether to try again. One tree is the
+        # whole run - generate, check it can run, draw it.
         if judge is None:
             attempt['outline'] = outline_for_judge(tree)
             record['accepted_tree'] = tree
             record['times']['accepted'] = clock()
-            log.info('no judge in this run; keeping the first tree that passes')
+            log.info('baseline run: the tree was not judged')
             return finish('no_judge')
 
         # Semantic judge. A fresh call for every tree: it never sees earlier verdicts.
