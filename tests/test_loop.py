@@ -58,7 +58,7 @@ TREE_WITHOUT_CLOSE = tree(SHAKE)
 TREE_WITH_WRONG_ID = tree(SHAKE_UNKNOWN)
 
 ACCEPT = '{"verdict": "accept", "errors": [], "reason": ""}'
-REJECT = ('{"verdict": "reject", "errors": ["missing_precondition"], '
+REJECT = ('{"verdict": "reject", "errors": ["tube is shaken while open"], '
           '"reason": "ShakeTube shakes an open tube that holds liquid."}')
 NOT_A_FORM = 'Looks fine to me.'
 
@@ -124,7 +124,7 @@ def test_rejected_tree_is_repaired(run):
 
     second = scripted.messages('generator')[1]
     assert 'REVIEWER FINDINGS:' in second
-    assert 'A necessary precondition or check is missing' in second
+    assert 'Problems: tube is shaken while open.' in second
     assert 'PREVIOUS TREE:' in second
 
 
