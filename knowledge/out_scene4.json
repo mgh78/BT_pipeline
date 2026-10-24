@@ -1,0 +1,174 @@
+{
+    "domain": "",
+    "parts_by_area": [],
+    "parts_by_transformation": [
+        {
+            "color": "DarkGreen",
+            "name": "Crate",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.5072966814041138,
+                    "y": 0.367000013589859,
+                    "z": 0.02800000086426735
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "DarkGreen",
+            "name": "Crate",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.5072966814041138,
+                    "y": 0.2329999953508377,
+                    "z": 0.02800000086426735
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Red",
+            "name": "Cuboid",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.656000018119812,
+                    "y": 0.23394352197647096,
+                    "z": 0.054999940097332
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Red",
+            "name": "Cuboid",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.5820000171661377,
+                    "y": 0.23394350707530976,
+                    "z": 0.054999940097332
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Red",
+            "name": "Cuboid",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.5099999904632568,
+                    "y": 0.23394350707530976,
+                    "z": 0.054999940097332
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Brown",
+            "name": "Cuboid",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.4410000145435333,
+                    "y": 0.23394350707530976,
+                    "z": 0.054999940097332
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Red",
+            "name": "Cuboid",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.3700000047683716,
+                    "y": 0.23394350707530976,
+                    "z": 0.054999940097332
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        }
+    ]
+}

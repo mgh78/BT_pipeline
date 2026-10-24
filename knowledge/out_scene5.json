@@ -1,0 +1,78 @@
+{
+    "domain": "",
+    "parts_by_area": [],
+    "parts_by_transformation": [
+        {
+            "color": "TransparentSemi",
+            "name": "MeasuringCylinder",
+            "liquid": {
+                "color": "Black",
+                "fill_amount": 0.5
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.6039999723434448,
+                    "y": -0.07599999755620957,
+                    "z": 0.12300000339746475
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "TransparentSemi",
+            "name": "MeasuringCylinder",
+            "liquid": {
+                "color": "DarkGreen",
+                "fill_amount": 0.5
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.6039999723434448,
+                    "y": 0.0,
+                    "z": 0.12300000339746475
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "TransparentSemi",
+            "name": "MeasuringCylinder",
+            "liquid": {
+                "color": "Red",
+                "fill_amount": 0.5
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.6039999723434448,
+                    "y": 0.07599999755620957,
+                    "z": 0.12300000339746475
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        }
+    ]
+}

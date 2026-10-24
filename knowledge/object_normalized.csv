@@ -1,0 +1,22 @@
+object name,normalized object name
+Box,box
+MeasuringCylinder,measuring cylinder
+measuring_cylinder,measuring cylinder
+small_measuring_cylinder,measuring cylinder
+Bowl,bowl
+Cuboid,cuboid
+Crate,crate
+Palette,palette
+CardboardPackageSmallMarked,marked package
+CardboardPackageSmall,package
+tea_package,tea package
+TestTubeHolderSmall,test tube holder
+test_tube,test tube
+small_test_tube,test tube
+test_tube_cap,test tube cap
+small_test_tube_cap,test tube cap
+test_tube_holder,test tube holder
+TestTubeSmall,test tube
+TestTubeHolderFoam,foam test tube holder
+foam_test_tube_holder,foam test tube holder
+TestTubeCapSmall,test tube cap

@@ -1,0 +1,174 @@
+{
+    "domain": "",
+    "parts_by_area": [],
+    "parts_by_transformation": [
+        {
+            "color": "Red",
+            "name": "Box",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.3500000834465027,
+                    "y": 0.001981783425435424,
+                    "z": 0.0820000022649765
+                },
+                "orientation": {
+                    "angle": 180.0,
+                    "axis": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 1.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Red",
+            "name": "cube",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 0.03999999910593033,
+                "position": {
+                    "x": 0.7049999833106995,
+                    "y": 0.29899999499320986,
+                    "z": 0.03099999949336052
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Blue",
+            "name": "cube",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 0.03999999910593033,
+                "position": {
+                    "x": 0.6200000047683716,
+                    "y": 0.29899999499320986,
+                    "z": 0.03099999949336052
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Green",
+            "name": "cube",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 0.03999999910593033,
+                "position": {
+                    "x": 0.5371999740600586,
+                    "y": 0.29899999499320986,
+                    "z": 0.03099999949336052
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Blue",
+            "name": "cube",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 0.03999999910593033,
+                "position": {
+                    "x": 0.45100000500679018,
+                    "y": 0.29899999499320986,
+                    "z": 0.03099999949336052
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Red",
+            "name": "cube",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 0.03999999910593033,
+                "position": {
+                    "x": 0.37049999833106997,
+                    "y": 0.29899999499320986,
+                    "z": 0.03099999949336052
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Green",
+            "name": "cube",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 0.03999999910593033,
+                "position": {
+                    "x": 0.2919999957084656,
+                    "y": 0.29899999499320986,
+                    "z": 0.03099999949336052
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,102 @@
+{
+    "domain": "",
+    "parts_by_area": [],
+    "parts_by_transformation": [
+        {
+            "color": "TransparentSemi",
+            "name": "MeasuringCylinder",
+            "liquid": {
+                "color": "Black",
+                "fill_amount": 0.5
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.42500001192092898,
+                    "y": 0.21299999952316285,
+                    "z": 0.11999999731779099
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "TransparentSemi",
+            "name": "MeasuringCylinder",
+            "liquid": {
+                "color": "DarkGreen",
+                "fill_amount": 0.5
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.42500001192092898,
+                    "y": 0.296999990940094,
+                    "z": 0.11999999731779099
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "TransparentSemi",
+            "name": "MeasuringCylinder",
+            "liquid": {
+                "color": "Red",
+                "fill_amount": 0.5
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.42500001192092898,
+                    "y": 0.38499999046325686,
+                    "z": 0.11999999731779099
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Yellow",
+            "name": "Bowl",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.6169999837875366,
+                    "y": -0.0034233219921588899,
+                    "z": 0.05999999865889549
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        }
+    ]
+}

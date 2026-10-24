@@ -1,0 +1,198 @@
+{
+    "domain": "",
+    "parts_by_area": [],
+    "parts_by_transformation": [
+        {
+            "color": "Grey",
+            "name": "TestTubeHolderSmall",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0000001192092896,
+                "position": {
+                    "x": 0.4269999861717224,
+                    "y": 0.2718999981880188,
+                    "z": 0.04500000178813934
+                },
+                "orientation": {
+                    "angle": 270.0,
+                    "axis": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 1.0000001192092896
+                    }
+                }
+            }
+        },
+        {
+            "color": "TransparentSemi",
+            "name": "TestTubeSmall",
+            "liquid": {
+                "color": "TransparentRed",
+                "fill_amount": 0.6729999780654907
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.4269999861717224,
+                    "y": 0.244299978017807,
+                    "z": 0.08649999648332596
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "TransparentSemi",
+            "name": "TestTubeSmall",
+            "liquid": {
+                "color": "TransparentRed",
+                "fill_amount": 0.6729999780654907
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.4269999861717224,
+                    "y": 0.2709999978542328,
+                    "z": 0.08649999648332596
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "TransparentSemi",
+            "name": "TestTubeSmall",
+            "liquid": {
+                "color": "TransparentRed",
+                "fill_amount": 0.6729999780654907
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.4269999861717224,
+                    "y": 0.29909998178482058,
+                    "z": 0.08649999648332596
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Yellow",
+            "name": "TestTubeCapSmall",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.5080000162124634,
+                    "y": 0.3779999911785126,
+                    "z": 0.014600000344216824
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Yellow",
+            "name": "TestTubeCapSmall",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.5515000224113464,
+                    "y": 0.3779999911785126,
+                    "z": 0.01489999983459711
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Yellow",
+            "name": "TestTubeCapSmall",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.5983187556266785,
+                    "y": 0.3779999911785126,
+                    "z": 0.014600000344216824
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "White",
+            "name": "TestTubeHolderFoam",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.6240000128746033,
+                    "y": 0.0,
+                    "z": 0.024000000208616258
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        }
+    ]
+}

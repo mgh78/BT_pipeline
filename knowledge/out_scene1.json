@@ -1,0 +1,102 @@
+{
+    "domain": "",
+    "parts_by_area": [],
+    "parts_by_transformation": [
+        {
+            "color": "Blue",
+            "name": "Box",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0000001192092896,
+                "position": {
+                    "x": 0.3840000033378601,
+                    "y": 0.4020000100135803,
+                    "z": 0.07408702373504639
+                },
+                "orientation": {
+                    "angle": 225.0,
+                    "axis": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 1.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Red",
+            "name": "Box",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0000001192092896,
+                "position": {
+                    "x": 0.20200000703334809,
+                    "y": 0.2199999988079071,
+                    "z": 0.07408701628446579
+                },
+                "orientation": {
+                    "angle": 225.0,
+                    "axis": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 1.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Blue",
+            "name": "cube",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.6299999952316284,
+                    "y": -0.050999999046325687,
+                    "z": 0.027000000700354577
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        },
+        {
+            "color": "Red",
+            "name": "cube",
+            "liquid": {
+                "color": "",
+                "fill_amount": 0.0
+            },
+            "transformation": {
+                "scale": 1.0,
+                "position": {
+                    "x": 0.6299999952316284,
+                    "y": 0.050999999046325687,
+                    "z": 0.027000000700354577
+                },
+                "orientation": {
+                    "angle": 0.0,
+                    "axis": {
+                        "x": 1.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            }
+        }
+    ]
+}
