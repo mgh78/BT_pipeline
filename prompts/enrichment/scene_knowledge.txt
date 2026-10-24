@@ -1,0 +1,10 @@
+Workspace Knowledge:
+A list of objects that appear in the scene, along with their corresponding attributes, is provided below. An image of the scene is also included in the prompt for reference.
+You should be able to map the objects in the image to their corresponding names and attributes from this list.
+{scene_knowledge_dictionary}
+
+IMPORTANT COORDINATE NOTE:
+In this environment, a higher value of 'position.y' indicates the object is located farther to the right, while a lower value indicates it's located farther to the left.
+
+Objects capable of holding other objects or supporting them cannot be grasped by the robot gripper and cannot have their positions changed.
+

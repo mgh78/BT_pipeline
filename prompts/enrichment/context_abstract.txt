@@ -1,0 +1,2 @@
+Imagine we are working with a manipulator robot. This robot is a robotic arm equipped with a gripper at its end effector, which starts in the closed position. The workspace contains several objects placed on a table.
+

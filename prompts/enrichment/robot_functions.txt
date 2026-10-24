@@ -1,0 +1,7 @@
+Robot Functions:
+The robot can perform the following functions:
+- place: Place an object at a specified location.
+- pour: Pour a liquid from one object to another.
+- shake: Shake an object a specified number of times.
+- close: Close one object with another object.
+

@@ -1,0 +1,5 @@
+Rules:
+- The output MUST be a concise, direct imperative command for the robot.
+- The output MUST NOT contain any extra text or commentary.
+- If the command contains the word "and" between clauses and one of them lacks a verb, ensure that both clauses include a verb in the final output.
+- If a function requires the robot to perform an action multiple times, the number must be expressed in a worded format (e.g., "two times" or "three times") instead of terms like "twice" or "once".
