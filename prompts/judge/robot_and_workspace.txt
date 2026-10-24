@@ -1,0 +1,5 @@
+Robot and workspace
+The robot is an arm with a gripper, working at a table. Each action is high-level and
+handles approaching, grasping, moving and releasing by itself.
+Positions are in metres. A higher y is further to the right, a lower y further to the
+left. A higher x is further from the robot base. z is the height above the table.

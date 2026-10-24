@@ -1,0 +1,16 @@
+Answer
+Answer with only this JSON object and no other text:
+{"verdict": "...", "errors": [...], "reason": "..."}
+
+verdict: Should this behavior tree be executed on the robot for this task? "accept" or
+"reject".
+errors: if you reject, every problem that applies; if you accept, an empty list. Use
+these codes:
+  "goal_not_achieved"          The tree does not achieve the requested goal
+  "missing_action"             A required action is missing
+  "wrong_order"                Actions are in the wrong order
+  "wrong_object_or_location"   A wrong object or location is used
+  "missing_precondition"       A necessary precondition or check is missing
+  "not_feasible"               The task is not feasible for the robot
+reason: if you reject, one sentence that explains the problem and names the node and
+objects involved; if you accept, an empty string.

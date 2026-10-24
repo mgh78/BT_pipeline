@@ -1,0 +1,7 @@
+Physical facts
+- A container that holds liquid spills when it is shaken while open, so it must be
+  closed before it is shaken.
+- Nothing can be poured into a closed container, so a container must be filled before it
+  is closed.
+- Objects that hold or support other objects (boxes, crates, bowls, palettes, racks, tube
+  holders) are fixed: they cannot be grasped or moved.

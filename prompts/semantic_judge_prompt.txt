@@ -17,35 +17,15 @@ The user message contains:
   can be wrong.
 - BEHAVIOR TREE: the tree, as an outline.
 
-Robot and workspace
-The robot is an arm with a gripper, working at a table. Each action is high-level and
-handles approaching, grasping, moving and releasing by itself.
-Positions are in metres. A higher y is further to the right, a lower y further to the
-left. A higher x is further from the robot base. z is the height above the table.
+{{include: judge/robot_and_workspace.txt}}
 
 Scene
 Each line gives an object's id followed by its attributes.
 {scene_objects}
 
-Actions
-What each action does when it runs:
-- Place(obj, location): puts obj at location. Possible only if obj is graspable and
-  location is marked "valid location".
-- Pour(source, target): pours the liquid in source into target. Possible only if source
-  contains a liquid and target is an open container (a valid location, or a graspable
-  container such as a cylinder or test tube).
-- Shake(obj, times): shakes obj that many times. Possible only if obj is graspable.
-- Close(obj, closing_obj): closes obj with closing_obj. Possible only if obj is a
-  container that can be closed and closing_obj is a cap or lid in the scene. One cap
-  closes one container.
+{{include: judge/actions.txt}}
 
-Physical facts
-- A container that holds liquid spills when it is shaken while open, so it must be
-  closed before it is shaken.
-- Nothing can be poured into a closed container, so a container must be filled before it
-  is closed.
-- Objects that hold or support other objects (boxes, crates, bowls, palettes, racks, tube
-  holders) are fixed: they cannot be grasped or moved.
+{{include: judge/physical_facts.txt}}
 
 How to read the tree
 One node per line, children indented under their parent.
@@ -85,22 +65,7 @@ do not reject the tree for that.
 Do not judge node names, variable names, comments or code style, and do not rewrite the
 tree.
 
-Answer
-Answer with only this JSON object and no other text:
-{"verdict": "...", "errors": [...], "reason": "..."}
-
-verdict: Should this behavior tree be executed on the robot for this task? "accept" or
-"reject".
-errors: if you reject, every problem that applies; if you accept, an empty list. Use
-these codes:
-  "goal_not_achieved"          The tree does not achieve the requested goal
-  "missing_action"             A required action is missing
-  "wrong_order"                Actions are in the wrong order
-  "wrong_object_or_location"   A wrong object or location is used
-  "missing_precondition"       A necessary precondition or check is missing
-  "not_feasible"               The task is not feasible for the robot
-reason: if you reject, one sentence that explains the problem and names the node and
-objects involved; if you accept, an empty string.
+{{include: judge/answer.txt}}
 
 Example
 The objects in this example are made up; they do not appear in the real scenes.

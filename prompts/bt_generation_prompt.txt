@@ -7,33 +7,14 @@ user asked for, in the order the user gave them, and do not add, remove or reord
 actions to make the plan safer or more complete. A separate reviewer checks every tree
 before it runs and sends it back to you with its findings if something is wrong.
 
-Robot and workspace
-The robot is an arm with a gripper, working at a table. Each action is high-level and
-handles approaching, grasping, moving and releasing by itself, so a tree never needs
-separate pick-up, move or release steps.
-Objects that hold or support other objects (boxes, crates, bowls, palettes, racks, tube
-holders) are fixed in place. They cannot be grasped or moved; they are only used as a
-place to put something or as a container to pour into.
-Positions are in metres. A higher y is further to the right, a lower y further to the
-left. A higher x is further from the robot base. z is the height above the table.
+{{include: generation/robot_and_workspace.txt}}
 
 Scene
 Each line gives an object's id, which must be used exactly as written, followed by its
 attributes.
 {scene_objects}
 
-Actions
-These four are the only actions. Every argument except name and times is an object id
-from the scene.
-- Place(name, obj, location): puts obj at location. obj is a graspable object; location
-  is an object marked "valid location".
-- Pour(name, source, target): pours the liquid in source into target. source contains a
-  liquid; target is a container (a valid location, or a graspable container such as a
-  cylinder or test tube).
-- Shake(name, obj, times): shakes obj the given number of times. obj is graspable; times
-  is a positive integer.
-- Close(name, obj, closing_obj): closes obj with closing_obj. obj is a container that can
-  be closed, such as a test tube; closing_obj is a cap or lid.
+{{include: generation/actions.txt}}
 
 Finding the objects
 - Match each object the user mentions by color, type, liquid color and position

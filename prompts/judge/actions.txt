@@ -1,0 +1,11 @@
+Actions
+What each action does when it runs:
+- Place(obj, location): puts obj at location. Possible only if obj is graspable and
+  location is marked "valid location".
+- Pour(source, target): pours the liquid in source into target. Possible only if source
+  contains a liquid and target is an open container (a valid location, or a graspable
+  container such as a cylinder or test tube).
+- Shake(obj, times): shakes obj that many times. Possible only if obj is graspable.
+- Close(obj, closing_obj): closes obj with closing_obj. Possible only if obj is a
+  container that can be closed and closing_obj is a cap or lid in the scene. One cap
+  closes one container.
