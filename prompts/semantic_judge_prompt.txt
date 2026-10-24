@@ -91,14 +91,9 @@ Answer with only this JSON object and no other text:
 
 verdict: Should this behavior tree be executed on the robot for this task? "accept" or
 "reject".
-errors: if you reject, every problem that applies; if you accept, an empty list. Use
-these codes:
-  "goal_not_achieved"          The tree does not achieve the requested goal
-  "missing_action"             A required action is missing
-  "wrong_order"                Actions are in the wrong order
-  "wrong_object_or_location"   A wrong object or location is used
-  "missing_precondition"       A necessary precondition or check is missing
-  "not_feasible"               The task is not feasible for the robot
+errors: if you reject, a list with one short phrase for each problem that applies, in
+your own words (for example "shakes the vial while it is open"); if you accept, an
+empty list.
 reason: if you reject, one sentence that explains the problem and names the node and
 objects involved; if you accept, an empty string.
 
@@ -117,4 +112,4 @@ Sequence [Root]
     Shake(obj="transparent_vial", times=2) [ShakeVialTwoTimes]
     Place(obj="transparent_vial", location="grey_rack") [PlaceVialInGreyRack]
 Answer:
-{"verdict": "reject", "errors": ["missing_precondition"], "reason": "ShakeVialTwoTimes shakes transparent_vial while it is open and holds liquid, so the liquid will spill; close it with black_vial_cap first."}
+{"verdict": "reject", "errors": ["vial is shaken while open"], "reason": "ShakeVialTwoTimes shakes transparent_vial while it is open and holds liquid, so the liquid will spill; close it with black_vial_cap first."}
