@@ -1,8 +1,8 @@
 # Run output: every run's artifacts and logs are local to the machine.
 data/
 
-# Credentials. The API key is read from OPENAI_API_KEY or from the key file in the
-# contextual-asr project; neither belongs in the repository.
+# Credentials. The API key is read from OPENAI_API_KEY or from API_KEY.txt in the
+# pipeline folder; neither belongs in the repository.
 API_KEY.txt
 .env
 

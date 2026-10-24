@@ -11,20 +11,19 @@ from pathlib import Path
 PIPELINE_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = PIPELINE_ROOT.parent
 
-# The contextual-asr project supplies the scene knowledge and the enrichment prompts.
-# They are read from there rather than copied, so there is a single source of truth.
-CONTEXTUAL_ASR_DIR = PROJECT_ROOT / 'contextual-asr' / 'contextual-asr'
-WORKSPACE_KNOWLEDGE_DIR = CONTEXTUAL_ASR_DIR / 'prompt' / 'workspace_knowledge'
+# The scene knowledge and the enrichment prompts were taken from the contextual-asr
+# project and now live in this repository.
+WORKSPACE_KNOWLEDGE_DIR = PIPELINE_ROOT / 'knowledge'
 OBJECT_NORMALIZED_FILE = WORKSPACE_KNOWLEDGE_DIR / 'object_normalized.csv'
 COLOR_NORMALIZED_FILE = WORKSPACE_KNOWLEDGE_DIR / 'color_normalized.csv'
-ENRICHMENT_PROMPT_DIR = CONTEXTUAL_ASR_DIR / 'prompt'
+ENRICHMENT_PROMPT_DIR = PIPELINE_ROOT / 'prompts' / 'enrichment'
 
 # The behavior tree generation prompt is ours to edit, so it lives here.
 BT_GENERATION_PROMPT_FILE = PIPELINE_ROOT / 'prompts' / 'bt_generation_prompt.txt'
 SEMANTIC_JUDGE_PROMPT_FILE = BT_GENERATION_PROMPT_FILE.parent / 'semantic_judge_prompt.txt'
 
 # The API key file. The OPENAI_API_KEY environment variable takes precedence.
-API_KEY_FILE = CONTEXTUAL_ASR_DIR / 'API_KEY.txt'
+API_KEY_FILE = PIPELINE_ROOT / 'API_KEY.txt'
 
 DATA_DIR = PIPELINE_ROOT / 'data'
 RUNS_DIR = DATA_DIR / 'runs'
