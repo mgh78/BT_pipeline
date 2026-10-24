@@ -127,20 +127,13 @@ when the model returns structured output:
 
 ```json
 {"verdict": "reject",
- "errors": ["missing_precondition"],
+ "errors": ["vial is shaken while open"],
  "reason": "ShakeVialTwoTimes shakes transparent_vial while it is open and holds liquid."}
 ```
 
-The six error codes, each shown to the generator as the form's own sentence:
-
-| Code | Sentence |
-|---|---|
-| `goal_not_achieved` | The tree does not achieve the requested goal |
-| `missing_action` | A required action is missing |
-| `wrong_order` | Actions are in the wrong order |
-| `wrong_object_or_location` | A wrong object or location is used |
-| `missing_precondition` | A necessary precondition or check is missing |
-| `not_feasible` | The task is not feasible for the robot |
+`errors` is a list of short phrases in the judge's own words. There is no fixed set of
+categories: the prompt does not list any, and `parse_judgement()` accepts any non-empty
+text.
 
 An accept carrying errors, or a reject with no error or no reason, is refused and the
 judge is asked again. **A judge that fails is never treated as an accept.**
@@ -173,11 +166,11 @@ Reason: ShakeTransparentTestTube1 shakes transparent_test_tube_1 while it is ope
 |---|---|
 | `COMMAND:` | the same every attempt — the enriched command, or the typed one |
 | `PREVIOUS TREE:` | the exact code of the tree that was sent back |
-| `Problems:` | the judge's error codes, written as the judgement form's own sentences — `missing_precondition` becomes "A necessary precondition or check is missing" |
+| `Problems:` | the judge's `errors` phrases, verbatim |
 | `Reason:` | the judge's one sentence, verbatim |
 
-So the generator learns *which category* is wrong and *why*, in the judge's words. It
-never sees the raw codes, the JSON, or the judge's prompt.
+So the generator learns *what* is wrong and *why*, in the judge's words. It never sees
+the JSON or the judge's prompt.
 
 A failed syntax check uses the same shape, with `SYNTAX CHECK ERRORS:` in place of
 `REVIEWER FINDINGS:` and each blocking check listed with its line number. A reply that
