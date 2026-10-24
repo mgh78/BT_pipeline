@@ -28,7 +28,7 @@ cd pipeline
 Pick one of the nine scenes, type a command, press **Run pipeline**.
 
 The API key is read from `OPENAI_API_KEY`, or from
-`contextual-asr/contextual-asr/API_KEY.txt` (the file must contain only the key).
+`API_KEY.txt` in this folder (the file must contain only the key; it is git-ignored).
 
 ## The modules
 
@@ -217,7 +217,7 @@ simply not part of any request.
 The contextual-asr enrichment prompt promises the model a picture in three places, so
 when the photo is not sent those sentences are removed from the assembled prompt
 (`without_image_references` in [modules/enrichment.py](modules/enrichment.py)). The
-prompt *files* are left untouched, since contextual-asr shares them.
+prompt *files* are left untouched, since they are copies of the contextual-asr originals.
 
 Dropping the photo made runs roughly twice as fast and about a third cheaper, with the
 same trees coming out. To send it again, set `ENRICHMENT_SEND_SCENE_IMAGE` and
@@ -226,19 +226,33 @@ sentences come back with them.
 
 ## Where the scene data comes from
 
-This project reads the nine scenes, their photos and the enrichment prompts from the
-contextual-asr project beside it:
+Everything the pipeline reads is inside this folder. The scene data and enrichment
+prompts were copied from the contextual-asr project, so they are now this repository's
+own files and no longer follow changes made there.
 
 ```
-Contextual-asr/
-├── contextual-asr/contextual-asr/prompt/   ← scenes, photos and enrichment prompts
-└── pipeline/                               ← this repository
+pipeline/
+├── knowledge/            ← the nine scenes (out_*.json, out_*.jpg) and the two
+│                           normalization CSVs
+├── prompts/
+│   ├── enrichment/       ← the five prompt files of the scene-aware command stage
+│   ├── bt_generation_prompt.txt   ← outline: intro + include lines
+│   ├── generation/       ← its parts: robot_and_workspace, actions
+│   ├── semantic_judge_prompt.txt  ← outline: intro + include lines
+│   └── judge/            ← its parts: robot_and_workspace, actions, physical_facts, answer
+└── API_KEY.txt           ← local only, git-ignored
 ```
 
-Nothing is duplicated, so there is one version of each file. If you clone this
-repository on its own, point `CONTEXTUAL_ASR_DIR` in [config.py](config.py) at that
-project, or copy `prompt/workspace_knowledge` and the five enrichment `.txt` files
-next to it.
+The generation and judge prompts are split by section. A line such as
+`{{include: generation/actions.txt}}` in the main file is replaced by that file's text
+when the prompt is loaded ([modules/prompt_files.py](modules/prompt_files.py)), so the
+model receives one continuous prompt, identical to the unsplit one. To change what the
+generator is told about the actions, edit `prompts/generation/actions.txt`; the main
+file only shows the order of the sections. The `generation/` and `judge/` parts are kept
+apart on purpose: their wording differs and each prompt is tuned separately.
+
+The paths are set in [config.py](config.py). Only the Python virtual environment is
+still shared: `../contextual-asr/venv`.
 
 ## What the syntax check checks
 
