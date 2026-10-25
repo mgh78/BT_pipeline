@@ -333,7 +333,14 @@ Without it nothing is lost — the PNG and the canvas do not need graphviz.
 
 All of them are in [config.py](config.py): where the scenes and prompts are read from,
 which models the generator and the judge use, the caps, the log levels, and the graph
-colours. The window's two dropdowns override the two models per run.
+colours. The window's two model dropdowns override the two models per run.
+
+A model in `RESPONSES_API_MODELS` (`gpt-6-luna`) is called through the Responses API and
+takes a reasoning effort, `low`, `medium` or `high`, and is sent no temperature. The window has an *effort* dropdown
+under each model dropdown; it is greyed out for any other model, which keeps using chat
+completions and never receives an effort. The defaults are `BT_GENERATION_REASONING_EFFORT`,
+`JUDGE_REASONING_EFFORT` and `ENRICHMENT_REASONING_EFFORT` (the enrichment stage has no
+dropdown). The effort that was sent is recorded in each run's `summary.json`.
 
 ## Tests
 
