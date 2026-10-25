@@ -63,7 +63,8 @@ def test_the_actions_and_physical_facts_are_in_the_prompts():
     assert 'Place(name, obj, location)' in generation
     shared = (config.BT_GENERATION_PROMPT_FILE.parent / 'robot_and_workspace.txt').read_text()
     assert shared.rstrip('\n') in generation and shared.rstrip('\n') in judge
-    assert 'Place(obj, location)' in judge
+    actions = (config.BT_GENERATION_PROMPT_FILE.parent / 'actions.txt').read_text()
+    assert actions.rstrip('\n') in generation and actions.rstrip('\n') in judge
     assert 'Physical facts' in judge
     # The generator is not given physical rules; they belong to the judge.
     assert 'Physical facts' not in generation

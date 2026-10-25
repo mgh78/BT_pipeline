@@ -23,7 +23,7 @@ Scene
 Each line gives an object's id followed by its attributes.
 {scene_objects}
 
-{{include: judge_actions.txt}}
+{{include: actions.txt}}
 
 {{include: judge_physical_facts.txt}}
 

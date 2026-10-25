@@ -14,7 +14,7 @@ Each line gives an object's id, which must be used exactly as written, followed 
 attributes.
 {scene_objects}
 
-{{include: generation_actions.txt}}
+{{include: actions.txt}}
 
 Finding the objects
 - Match each object the user mentions by color, type, liquid color and position
