@@ -183,3 +183,23 @@ def test_the_text_outline_marks_decorators(scene):
     outline = _as_text(tree)
     assert '◇ RetryShake  (num_failures=3)' in outline
     assert outline.index('RetryShake') < outline.index('ShakeTube')
+
+
+def test_the_judge_outline_shows_decorators_and_conditions(scene):
+    from modules.loop import outline_for_judge
+    _, tree = run_checks(code(
+        'set_1 = py_trees.behaviours.SetBlackboardVariable(name="SetShaken", '
+        'variable_name="shaken", variable_value=True, overwrite=True)',
+        f'shake_1 = {SHAKE}',
+        'retry_1 = py_trees.decorators.Retry(name="RetryShake", child=shake_1, '
+        'num_failures=3)',
+        'invert_1 = py_trees.decorators.Inverter(name="NotShaken", child=retry_1)',
+        root_children='set_1, invert_1'), scene)
+    assert outline_for_judge(tree).splitlines() == [
+        'Sequence [Root]',
+        '    SetBlackboardVariable(variable_name="shaken", variable_value=true, '
+        'overwrite=true) [SetShaken]',
+        '    Inverter [NotShaken]',
+        '        Retry(num_failures=3) [RetryShake]',
+        f'            Shake(obj="{TUBE}", times=2) [ShakeTube]',
+    ]

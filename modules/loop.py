@@ -108,20 +108,24 @@ def form_sentences(form):
 # --- What the judge is shown --------------------------------------------------
 
 def outline_for_judge(node, depth=0):
-    """The built tree as the judge reads it: action type and arguments on every line.
+    """The built tree as the judge reads it: node type and arguments on every line.
 
-    Composites show their type and name; actions show their type, their arguments and
-    their name in brackets. The judge is told to trust the arguments, not the names,
-    which is why the tester's ``_as_text`` is not reused - it shows names only.
+    Composites show their type and name; actions, conditions and blackboard behaviours
+    show their type, their arguments and their name in brackets; a decorator does the
+    same and has the node it wraps indented under it. The judge is told to trust the
+    arguments, not the names, which is why the tester's ``_as_text`` is not reused - it
+    shows names only.
     """
     indent = '    ' * depth
     kind = type(node).__name__
-    if kind in ('Sequence', 'Selector'):
-        lines = [f'{indent}{kind} [{node.name}]']
-        lines += [outline_for_judge(child, depth + 1) for child in node.children]
-        return '\n'.join(lines)
     arguments = ', '.join(f'{key}={json.dumps(value)}'
                           for key, value in (getattr(node, 'arguments', None) or {}).items())
+    children = list(getattr(node, 'children', []))
+    if kind in ('Sequence', 'Selector') or children:
+        head = f'{kind}({arguments})' if arguments else kind
+        lines = [f'{indent}{head} [{node.name}]']
+        lines += [outline_for_judge(child, depth + 1) for child in children]
+        return '\n'.join(lines)
     return f'{indent}{kind}({arguments}) [{node.name}]'
 
 
