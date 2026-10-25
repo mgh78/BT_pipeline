@@ -6,14 +6,18 @@ Run from the pipeline folder:
 """
 
 import os
+import re
 import sys
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import config  # noqa: E402
 from core.pipeline import StageError  # noqa: E402
-from modules.prompt_files import load_prompt  # noqa: E402
+from modules.prompt_files import INCLUDE_PATTERN, load_prompt  # noqa: E402
+
+MAIN_PROMPTS = [config.BT_GENERATION_PROMPT_FILE, config.SEMANTIC_JUDGE_PROMPT_FILE]
 
 
 def test_include_is_replaced_by_the_file(tmp_path):
@@ -44,3 +48,29 @@ def test_endless_include_is_an_error(tmp_path):
     main.write_text('{{include: main.txt}}')
     with pytest.raises(StageError):
         load_prompt(main)
+
+
+@pytest.mark.parametrize('path', MAIN_PROMPTS, ids=lambda p: p.name)
+def test_real_prompts_assemble_completely(path):
+    text = load_prompt(path)
+    assert not INCLUDE_PATTERN.search(text)
+    assert '{scene_objects}' in text
+
+
+def test_the_actions_and_physical_facts_are_in_the_prompts():
+    generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
+    judge = load_prompt(config.SEMANTIC_JUDGE_PROMPT_FILE)
+    assert 'Place(name, obj, location)' in generation
+    assert 'Place(obj, location)' in judge
+    assert 'Physical facts' in judge
+    # The generator is not given physical rules; they belong to the judge.
+    assert 'Physical facts' not in generation
+
+
+def test_every_part_file_is_used():
+    used = set()
+    for path in MAIN_PROMPTS:
+        used |= {path.parent / name for name in
+                 re.findall(r'\{\{include:\s*(.+?)\s*\}\}', path.read_text())}
+    parts = set(config.BT_GENERATION_PROMPT_FILE.parent.glob('*.txt')) - set(MAIN_PROMPTS)
+    assert parts == used

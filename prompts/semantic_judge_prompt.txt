@@ -27,25 +27,9 @@ Scene
 Each line gives an object's id followed by its attributes.
 {scene_objects}
 
-Actions
-What each action does when it runs:
-- Place(obj, location): puts obj at location. Possible only if obj is graspable and
-  location is marked "valid location".
-- Pour(source, target): pours the liquid in source into target. Possible only if source
-  contains a liquid and target is an open container (a valid location, or a graspable
-  container such as a cylinder or test tube).
-- Shake(obj, times): shakes obj that many times. Possible only if obj is graspable.
-- Close(obj, closing_obj): closes obj with closing_obj. Possible only if obj is a
-  container that can be closed and closing_obj is a cap or lid in the scene. One cap
-  closes one container.
+{{include: judge_actions.txt}}
 
-Physical facts
-- A container that holds liquid spills when it is shaken while open, so it must be
-  closed before it is shaken.
-- Nothing can be poured into a closed container, so a container must be filled before it
-  is closed.
-- Objects that hold or support other objects (boxes, crates, bowls, palettes, racks, tube
-  holders) are fixed: they cannot be grasped or moved.
+{{include: judge_physical_facts.txt}}
 
 How to read the tree
 One node per line, children indented under their parent.

@@ -18,18 +18,7 @@ Each line gives an object's id, which must be used exactly as written, followed 
 attributes.
 {scene_objects}
 
-Actions
-These four are the only actions. Every argument except name and times is an object id
-from the scene.
-- Place(name, obj, location): puts obj at location. obj is a graspable object; location
-  is an object marked "valid location".
-- Pour(name, source, target): pours the liquid in source into target. source contains a
-  liquid; target is a container (a valid location, or a graspable container such as a
-  cylinder or test tube).
-- Shake(name, obj, times): shakes obj the given number of times. obj is graspable; times
-  is a positive integer.
-- Close(name, obj, closing_obj): closes obj with closing_obj. obj is a container that can
-  be closed, such as a test tube; closing_obj is a cap or lid.
+{{include: generation_actions.txt}}
 
 Finding the objects
 - Match each object the user mentions by color, type, liquid color and position
