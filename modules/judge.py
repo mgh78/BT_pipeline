@@ -1,7 +1,7 @@
 """The semantic judge: does this tree do what the user asked, in a way the robot can?
 
 It runs after every tree that passes the syntax check. It fills in the judgement form -
-accept or reject, which categories are wrong, and one sentence saying why - and on a
+accept or reject, which problems there are in its own words, and why - and on a
 rejection that form goes back to the generator as the feedback for the next tree.
 
 What it deliberately does not get: the Python code, the scene's target state, the

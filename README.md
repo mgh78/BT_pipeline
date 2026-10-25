@@ -39,7 +39,7 @@ The API key is read from `OPENAI_API_KEY`, or from
 | Scene-aware command | [modules/enrichment.py](modules/enrichment.py) | The contextual-asr post-processing, using the same five prompt files. Rewrites "the left tube" into the object that is actually there. |
 | Behavior tree | [modules/generator.py](modules/generator.py) | Asks ChatGPT for `create_behavior_tree()` using [prompts/bt_generation_prompt.txt](prompts/bt_generation_prompt.txt). It only translates: it never checks whether the plan is safe or complete. |
 | Syntax check | [modules/tester.py](modules/tester.py) | Checks the generated function statically, then builds it in a sandbox. Nothing physical — only whether the code can run. |
-| Semantic judge | [modules/judge.py](modules/judge.py) | Fills in the judgement form: accept or reject, which categories are wrong, and one sentence saying why. On a rejection that form becomes the generator's feedback. |
+| Semantic judge | [modules/judge.py](modules/judge.py) | Fills in the judgement form: accept or reject, which problems there are in its own words, and why. On a rejection that form becomes the generator's feedback. |
 | Generation loop | [modules/loop.py](modules/loop.py), [modules/loop_stage.py](modules/loop_stage.py) | Runs the three above until a tree is accepted or a cap is reached, and keeps every attempt's artifacts apart. |
 | Tree graph | [modules/graph.py](modules/graph.py) | Lays the tree out once and draws it on the canvas, to a PNG and to a `.dot` file. |
 
@@ -128,7 +128,7 @@ when the model returns structured output:
 ```json
 {"analysis": "The tree has every requested action, but Shake runs while the vial is open.",
  "verdict": "reject",
- "errors": ["missing_precondition"],
+ "errors": ["vial is shaken while open"],
  "reason": "ShakeVialTwoTimes shakes transparent_vial while it is open and holds liquid."}
 ```
 
@@ -138,16 +138,9 @@ fields in the order of the schema, so it works through its checks before it comm
 of the window's Judge tab, but it is **not** sent to the BT creator: the feedback stays
 the errors and the reason.
 
-The six error codes, each shown to the generator as the form's own sentence:
-
-| Code | Sentence |
-|---|---|
-| `goal_not_achieved` | The tree does not achieve the requested goal |
-| `missing_action` | A required action is missing |
-| `wrong_order` | Actions are in the wrong order |
-| `wrong_object_or_location` | A wrong object or location is used |
-| `missing_precondition` | A necessary precondition or check is missing |
-| `not_feasible` | The task is not feasible for the robot |
+`errors` is a list of short phrases in the judge's own words. There is no fixed set of
+categories: the prompt does not list any, and `parse_judgement()` accepts any non-empty
+text.
 
 A form without exactly the four keys, with an empty analysis, an accept carrying errors,
 or a reject with no error or no reason, is refused and the
@@ -173,7 +166,7 @@ def create_behavior_tree():
     except Exception as e:
         logging.error(f"Error in create_behavior_tree: {e}")
 REVIEWER FINDINGS:
-Problems: A necessary precondition or check is missing.
+Problems: Shake runs while the tube is open.
 Reason: ShakeTransparentTestTube1 shakes transparent_test_tube_1 while it is open and holds liquid, so the liquid will spill; it must be closed with a cap first.
 ```
 
@@ -181,11 +174,11 @@ Reason: ShakeTransparentTestTube1 shakes transparent_test_tube_1 while it is ope
 |---|---|
 | `COMMAND:` | the same every attempt — the enriched command, or the typed one |
 | `PREVIOUS TREE:` | the exact code of the tree that was sent back |
-| `Problems:` | the judge's error codes, written as the judgement form's own sentences — `missing_precondition` becomes "A necessary precondition or check is missing" |
-| `Reason:` | the judge's one sentence, verbatim |
+| `Problems:` | the judge's `errors` phrases, verbatim |
+| `Reason:` | the judge's explanation, verbatim |
 
-So the generator learns *which category* is wrong and *why*, in the judge's words. It
-never sees the raw codes, the JSON, or the judge's prompt.
+So the generator learns *what* is wrong and *why*, in the judge's words. It never sees
+the analysis, the JSON, or the judge's prompt.
 
 A failed syntax check uses the same shape, with `SYNTAX CHECK ERRORS:` in place of
 `REVIEWER FINDINGS:` and each blocking check listed with its line number. A reply that

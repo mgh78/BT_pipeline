@@ -24,26 +24,16 @@ log = logging_setup.get_logger('judge')
 
 # --- The judgement form -------------------------------------------------------
 
-# The codes the judge answers with, and the sentence on the judgement form that each
-# one stands for. The sentences are what the generator is shown.
-ERROR_CODES = {
-    'goal_not_achieved': 'The tree does not achieve the requested goal',
-    'missing_action': 'A required action is missing',
-    'wrong_order': 'Actions are in the wrong order',
-    'wrong_object_or_location': 'A wrong object or location is used',
-    'missing_precondition': 'A necessary precondition or check is missing',
-    'not_feasible': 'The task is not feasible for the robot',
-}
-
 # Passed to the API as a structured output schema when the model supports it. The model
 # writes the fields in the order they appear here, so ``analysis`` comes first: the judge
-# works through its checks before it commits to a verdict.
+# works through its checks before it commits to a verdict. ``errors`` are free text: the
+# judge names each problem in its own words, with no fixed set of categories.
 JUDGE_SCHEMA = {
     'type': 'object',
     'properties': {
         'analysis': {'type': 'string'},
         'verdict': {'type': 'string', 'enum': ['accept', 'reject']},
-        'errors': {'type': 'array', 'items': {'type': 'string', 'enum': list(ERROR_CODES)}},
+        'errors': {'type': 'array', 'items': {'type': 'string'}},
         'reason': {'type': 'string'},
     },
     'required': ['analysis', 'verdict', 'errors', 'reason'],
@@ -94,22 +84,24 @@ def parse_judgement(text):
         raise ValueError('analysis must be a non-empty string')
     if verdict not in ('accept', 'reject'):
         raise ValueError(f'verdict must be "accept" or "reject", not {verdict!r}')
-    if not isinstance(errors, list) or any(e not in ERROR_CODES for e in errors):
-        raise ValueError(f'errors must be a list of known codes, got {errors!r}')
+    if (not isinstance(errors, list)
+            or any(not isinstance(e, str) or not e.strip() for e in errors)):
+        raise ValueError(f'errors must be a list of non-empty phrases, got {errors!r}')
     if not isinstance(reason, str):
         raise ValueError('reason must be a string')
     if verdict == 'accept' and errors:
         raise ValueError('an accepted tree cannot have errors')
     if verdict == 'reject' and (not errors or not reason.strip()):
-        raise ValueError('a rejection needs at least one error code and a reason')
+        raise ValueError('a rejection needs at least one error and a reason')
 
     return {'analysis': analysis.strip(), 'verdict': verdict,
-            'errors': list(dict.fromkeys(errors)), 'reason': reason.strip()}
+            'errors': list(dict.fromkeys(e.strip() for e in errors)),
+            'reason': reason.strip()}
 
 
 def form_sentences(form):
-    """The ticked categories of a form, as the judgement form words them."""
-    return [ERROR_CODES[code] for code in form.get('errors', [])]
+    """The problems the judge listed, in the judge's own words."""
+    return list(form.get('errors', []))
 
 
 # --- What the judge is shown --------------------------------------------------

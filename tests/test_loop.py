@@ -61,7 +61,7 @@ TREE_WITH_WRONG_ID = tree(SHAKE_UNKNOWN)
 ANALYSIS = 'SECRET-ANALYSIS: every requested action is there; the tube is shaken open.'
 ACCEPT = '{"analysis": "All checks pass.", "verdict": "accept", "errors": [], "reason": ""}'
 REJECT = ('{"analysis": "' + ANALYSIS + '", "verdict": "reject", '
-          '"errors": ["missing_precondition"], '
+          '"errors": ["tube is shaken while open"], '
           '"reason": "ShakeTube shakes an open tube that holds liquid."}')
 NOT_A_FORM = 'Looks fine to me.'
 
@@ -128,7 +128,7 @@ def test_rejected_tree_is_repaired(run):
 
     second = scripted.messages('generator')[1]
     assert 'REVIEWER FINDINGS:' in second
-    assert 'A necessary precondition or check is missing' in second
+    assert 'Problems: tube is shaken while open.' in second
     assert 'PREVIOUS TREE:' in second
     # The analysis is for the person reading the run; the generator gets errors + reason.
     assert 'SECRET-ANALYSIS' not in second
@@ -266,3 +266,27 @@ def test_a_form_with_the_four_keys_keeps_its_analysis():
 def test_a_form_without_a_proper_analysis_is_refused(reply):
     with pytest.raises(ValueError):
         loop.parse_judgement(reply)
+
+
+# --- errors are free text -------------------------------------------------------
+
+def form(errors):
+    return json.dumps({'analysis': 'a', 'verdict': 'reject', 'errors': errors,
+                       'reason': 'r'})
+
+
+def test_errors_are_the_judges_own_words():
+    parsed = loop.parse_judgement(form(['  wrong cube  ', 'no cap', 'no cap']))
+    assert parsed['errors'] == ['wrong cube', 'no cap']
+    assert loop.form_sentences(parsed) == ['wrong cube', 'no cap']
+
+
+@pytest.mark.parametrize('errors', [[''], ['  '], [3], 'no cap'])
+def test_empty_or_non_text_errors_are_refused(errors):
+    with pytest.raises(ValueError):
+        loop.parse_judgement(form(errors))
+
+
+def test_the_schema_does_not_fix_the_error_wording():
+    items = loop.JUDGE_SCHEMA['properties']['errors']['items']
+    assert items == {'type': 'string'}
