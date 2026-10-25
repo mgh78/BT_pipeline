@@ -13,8 +13,8 @@ It never writes or repairs a tree, and a judge that fails is never treated as an
 
 import config
 from core import logging_setup
-from core.pipeline import StageError
 from modules import llm, loop
+from modules.prompt_files import load_prompt
 
 log = logging_setup.get_logger('judge')
 
@@ -42,9 +42,7 @@ class SemanticJudge:
         judgement form, so ``str.format`` would break it.
         """
         path = config.SEMANTIC_JUDGE_PROMPT_FILE
-        if not path.exists():
-            raise StageError(f'The judge prompt is missing: {path}')
-        prompt = path.read_text(encoding='utf-8')
+        prompt = load_prompt(path)
         if '{scene_objects}' not in prompt:
             self.log.warning('%s has no {scene_objects} placeholder — the judge will '
                              'not be told which objects are in the scene', path.name)

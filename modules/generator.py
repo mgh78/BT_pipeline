@@ -14,8 +14,8 @@ import re
 
 import config
 from core import logging_setup
-from core.pipeline import StageError
 from modules import llm
+from modules.prompt_files import load_prompt
 
 log = logging_setup.get_logger('generator')
 
@@ -42,9 +42,7 @@ class BTGenerator:
         except block, so ``str.format`` would break it.
         """
         path = config.BT_GENERATION_PROMPT_FILE
-        if not path.exists():
-            raise StageError(f'The generation prompt is missing: {path}')
-        prompt = path.read_text(encoding='utf-8')
+        prompt = load_prompt(path)
         if '{scene_objects}' not in prompt:
             self.log.warning('%s has no {scene_objects} placeholder — the model will '
                              'not be told which objects are in the scene', path.name)
