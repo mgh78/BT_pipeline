@@ -135,8 +135,11 @@ class GraphView(customtkinter.CTkFrame):
             self.canvas.scan_dragto(event.x, event.y, gain=1)
 
     def _select(self, node):
-        kind = {'sequence': 'Sequence', 'selector': 'Selector'}.get(node.kind, 'Action')
+        kind = {'sequence': 'Sequence', 'selector': 'Selector', 'decorator': 'Decorator',
+                'behaviour': 'Condition / blackboard'}.get(node.kind, 'Action')
         text = f'{kind}  ·  {node.label}'
+        if node.kind in ('decorator', 'behaviour') and node.type_name:
+            text += f'  ({node.type_name})'
         if node.arguments:
             text += '\n' + '\n'.join(f'    {k} = {v}' for k, v in node.arguments.items())
         if node.children:

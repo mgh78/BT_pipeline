@@ -9,7 +9,9 @@ and is then used by
   ``bt_graph_graphviz.png`` when the ``dot`` binary happens to be available.
 
 Nodes are drawn with the usual behavior tree conventions: a sequence carries an arrow,
-a selector a question mark, and actions are rounded boxes listing their arguments.
+a selector a question mark, and actions are rounded boxes listing their arguments. A
+decorator is drawn in its own colour with its class name under the title, and the
+condition and blackboard behaviours are drawn the same way.
 """
 
 import html
@@ -33,7 +35,8 @@ MARGIN = 30
 TITLE_CHAR_WIDTH = 7.6     # approximate advance of the title font
 ARGUMENT_CHAR_WIDTH = 6.2  # approximate advance of the argument font
 
-MARKERS = {'sequence': '\u2192', 'selector': '?', 'action': ''}
+MARKERS = {'sequence': '\u2192', 'selector': '?', 'action': '', 'decorator': '',
+           'behaviour': ''}
 
 
 @dataclass
@@ -42,8 +45,9 @@ class GraphNode:
 
     id: str
     label: str
-    kind: str                      # 'sequence', 'selector' or 'action'
+    kind: str                      # 'sequence', 'selector', 'action', 'decorator', 'behaviour'
     arguments: dict = field(default_factory=dict)
+    type_name: str = ''            # the py_trees class, shown for decorators and behaviours
     children: list = field(default_factory=list)
     x: float = 0.0                 # centre of the box
     y: float = 0.0                 # top of the box
@@ -57,7 +61,10 @@ class GraphNode:
 
     @property
     def argument_lines(self):
-        return [f'{key} = {value}' for key, value in self.arguments.items()]
+        lines = [f'{key} = {value}' for key, value in self.arguments.items()]
+        if self.kind in ('decorator', 'behaviour') and self.type_name:
+            lines.insert(0, self.type_name)
+        return lines
 
     @property
     def left(self):
@@ -79,7 +86,7 @@ class GraphNode:
     def as_dict(self):
         return {
             'id': self.id, 'label': self.label, 'kind': self.kind,
-            'arguments': self.arguments,
+            'type_name': self.type_name, 'arguments': self.arguments,
             'children': [child.as_dict() for child in self.children],
         }
 
@@ -107,6 +114,8 @@ class GraphLayout:
             'actions': sum(1 for n in nodes if n.kind == 'action'),
             'sequences': sum(1 for n in nodes if n.kind == 'sequence'),
             'selectors': sum(1 for n in nodes if n.kind == 'selector'),
+            'decorators': sum(1 for n in nodes if n.kind == 'decorator'),
+            'behaviours': sum(1 for n in nodes if n.kind == 'behaviour'),
             'depth': _depth(self.root),
         }
 
@@ -116,6 +125,11 @@ def _depth(node):
 
 
 # --- Building and laying out --------------------------------------------------
+
+def _is_decorator(node):
+    import py_trees
+    return isinstance(node, py_trees.decorators.Decorator)
+
 
 def from_py_trees(root, prefix='n'):
     """Convert a built py_trees tree into GraphNodes."""
@@ -128,12 +142,17 @@ def from_py_trees(root, prefix='n'):
             kind = 'sequence'
         elif type_name == 'Selector':
             kind = 'selector'
-        else:
+        elif _is_decorator(node):
+            kind = 'decorator'
+        elif hasattr(node, 'action'):      # the four actions; see tester._sandbox
             kind = 'action'
+        else:
+            kind = 'behaviour'
         arguments = {key: value for key, value in
                      (getattr(node, 'arguments', None) or {}).items() if key != 'name'}
         graph_node = GraphNode(id=f'{prefix}{counter[0]}', label=node.name, kind=kind,
-                               arguments={k: str(v) for k, v in arguments.items()})
+                               arguments={k: str(v) for k, v in arguments.items()},
+                               type_name=type_name)
         graph_node.children = [convert(child) for child in getattr(node, 'children', [])]
         return graph_node
 
@@ -147,7 +166,8 @@ def from_dict(payload, prefix='n'):
     def convert(entry):
         counter[0] += 1
         node = GraphNode(id=f'{prefix}{counter[0]}', label=entry['label'],
-                         kind=entry['kind'], arguments=entry.get('arguments', {}))
+                         kind=entry['kind'], arguments=entry.get('arguments', {}),
+                         type_name=entry.get('type_name', ''))
         node.children = [convert(child) for child in entry.get('children', [])]
         return node
 
@@ -261,7 +281,8 @@ def render_png(graph_layout, path, scale=2):
 
 # --- DOT and graphviz ---------------------------------------------------------
 
-SHAPES = {'sequence': 'box', 'selector': 'box', 'action': 'box'}
+SHAPES = {'sequence': 'box', 'selector': 'box', 'action': 'box', 'decorator': 'box',
+          'behaviour': 'box'}
 
 
 def to_dot(graph_layout, title=''):
