@@ -49,6 +49,19 @@ The four actions come from the manipulator prompt in the contextual-asr project:
 (`SetBlackboardVariable`, `CheckBlackboardVariableValue`, …), but only where the command
 asks for what they do.
 
+## Where the behavior tree grammar comes from
+
+On the `BT_Grammar` branch the grammar the generation prompt gives the model — the
+composites, the decorators, the condition and blackboard behaviours, and the
+`ComparisonExpression` check — is based on the **py_trees** library:
+<https://github.com/splintered-reality/py_trees>. The node names, their keyword
+arguments and what each one does follow py_trees 2.x (the signatures were checked against
+the installed 2.6.0). The same tables drive the syntax check
+(`DECORATOR_SIGNATURES` and `BEHAVIOUR_SIGNATURES` in [modules/tester.py](modules/tester.py)),
+so a tree that uses a node or an argument py_trees does not have is refused before it is
+built. Only the four actions (`Place`, `Pour`, `Shake`, `Close`) are not from py_trees:
+they are this project's own stand-ins.
+
 ## Who decides what
 
 Each part has exactly one job, and they are deliberately kept apart.
