@@ -75,7 +75,8 @@ class Scripted:
         self.calls = []
 
     def __call__(self, system_prompt, text, model, temperature, logger, context=None,
-                 image_path=None, tag='llm', response_format=None):
+                 image_path=None, tag='llm', response_format=None,
+                 reasoning_effort=None):
         who = 'judge' if 'judge' in tag else 'generator'
         queue = self.judge if who == 'judge' else self.generator
         assert queue, f'the {who} was called more often than the script allows'

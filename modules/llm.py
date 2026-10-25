@@ -39,6 +39,35 @@ def _rejects_temperature(error):
         or 'Unsupported parameter' in text or 'unsupported_parameter' in text)
 
 
+def reasoning_effort_for(model, effort):
+    """The effort that is really sent: only a Responses API model takes one."""
+    return effort if model in config.RESPONSES_API_MODELS else None
+
+
+def _responses_arguments(model, temperature, system_prompt, user_content, response_format,
+                         reasoning_effort):
+    """The same request, written for the Responses API."""
+    content = []
+    for part in user_content:
+        if part['type'] == 'image_url':
+            content.append({'type': 'input_image', 'image_url': part['image_url']['url'],
+                            'detail': part['image_url']['detail']})
+        else:
+            content.append({'type': 'input_text', 'text': part['text']})
+    arguments = {
+        'model': model,
+        'temperature': temperature,
+        'instructions': system_prompt,
+        'input': [{'role': 'user', 'content': content}],
+    }
+    if reasoning_effort:
+        arguments['reasoning'] = {'effort': reasoning_effort}
+    if response_format is not None:
+        arguments['text'] = {'format': {'type': 'json_schema',
+                                        **response_format['json_schema']}}
+    return arguments
+
+
 def readable_error(error):
     """Turn an API error into one sentence a person can act on.
 
@@ -78,8 +107,8 @@ def encode_image(path):
 
 
 def ask(system_prompt, text, model, temperature, logger, context=None,
-        image_path=None, tag='llm', response_format=None):
-    """Send one chat completion and return ``{'text', 'usage', 'seconds', 'model'}``.
+        image_path=None, tag='llm', response_format=None, reasoning_effort=None):
+    """Send one model call and return ``{'text', 'usage', 'seconds', 'model'}``.
 
     Args:
         system_prompt: the developer message, the whole instruction set.
@@ -92,6 +121,8 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
             It may contain folders, which are created.
         response_format: an API response-format object, used by the judge to request
             its judgement form as structured output. Omitted when None.
+        reasoning_effort: 'low', 'medium' or 'high'. Sent only to a model that is called
+            through the Responses API (``config.RESPONSES_API_MODELS``).
 
     Returns:
         dict with the reply text, token usage, elapsed seconds and the model used, plus
@@ -116,23 +147,31 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
         logger, 'llm.request', f'asking {model} ({len(system_prompt)} chars of prompt'
                                f'{", photo attached" if image_url else ""})',
         model=model, temperature=temperature, prompt_chars=len(system_prompt),
-        image=bool(image_url), user_text=str(text))
+        image=bool(image_url), user_text=str(text),
+        reasoning_effort=reasoning_effort_for(model, reasoning_effort))
 
     client = OpenAI(api_key=load_api_key())
-    arguments = {
-        'model': model,
-        'temperature': temperature,
-        'messages': [
-            {'role': 'developer', 'content': system_prompt},
-            {'role': 'user', 'content': user_content},
-        ],
-    }
-    if response_format is not None:
-        arguments['response_format'] = response_format
+    use_responses = model in config.RESPONSES_API_MODELS
+    if use_responses:
+        arguments = _responses_arguments(model, temperature, system_prompt, user_content,
+                                         response_format, reasoning_effort)
+        create = client.responses.create
+    else:
+        arguments = {
+            'model': model,
+            'temperature': temperature,
+            'messages': [
+                {'role': 'developer', 'content': system_prompt},
+                {'role': 'user', 'content': user_content},
+            ],
+        }
+        if response_format is not None:
+            arguments['response_format'] = response_format
+        create = client.chat.completions.create
 
     started = time.time()
     try:
-        response = client.chat.completions.create(**arguments)
+        response = create(**arguments)
     except Exception as error:  # noqa: BLE001 - turn any client error into a stage error
         if _rejects_temperature(error) and 'temperature' in arguments:
             # Some models accept only their default temperature. Drop it and say so,
@@ -141,7 +180,7 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
                            model, temperature)
             arguments.pop('temperature')
             try:
-                response = client.chat.completions.create(**arguments)
+                response = create(**arguments)
             except Exception as retry_error:  # noqa: BLE001
                 logger.error('the model call failed: %s', retry_error)
                 raise StageError(readable_error(retry_error)) from retry_error
@@ -150,14 +189,23 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
             raise StageError(readable_error(error)) from error
 
     seconds = time.time() - started
-    answer = (response.choices[0].message.content or '').strip()
     usage = {}
-    if getattr(response, 'usage', None):
-        usage = {
-            'prompt_tokens': response.usage.prompt_tokens,
-            'completion_tokens': response.usage.completion_tokens,
-            'total_tokens': response.usage.total_tokens,
-        }
+    if use_responses:
+        answer = (response.output_text or '').strip()
+        if getattr(response, 'usage', None):
+            usage = {
+                'prompt_tokens': response.usage.input_tokens,
+                'completion_tokens': response.usage.output_tokens,
+                'total_tokens': response.usage.total_tokens,
+            }
+    else:
+        answer = (response.choices[0].message.content or '').strip()
+        if getattr(response, 'usage', None):
+            usage = {
+                'prompt_tokens': response.usage.prompt_tokens,
+                'completion_tokens': response.usage.completion_tokens,
+                'total_tokens': response.usage.total_tokens,
+            }
 
     if context is not None:
         artifacts[f'{tag} reply'] = context.write_text(f'{tag}/raw_reply.txt', answer)
