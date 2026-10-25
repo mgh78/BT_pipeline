@@ -43,8 +43,11 @@ The API key is read from `OPENAI_API_KEY`, or from
 | Generation loop | [modules/loop.py](modules/loop.py), [modules/loop_stage.py](modules/loop_stage.py) | Runs the three above until a tree is accepted or a cap is reached, and keeps every attempt's artifacts apart. |
 | Tree graph | [modules/graph.py](modules/graph.py) | Lays the tree out once and draws it on the canvas, to a PNG and to a `.dot` file. |
 
-The four actions, the scene mechanism and all the structural rules come from the
-manipulator prompt in the contextual-asr project: `Place`, `Pour`, `Shake`, `Close`.
+The four actions come from the manipulator prompt in the contextual-asr project: `Place`,
+`Pour`, `Shake`, `Close`. The generator may also use the py_trees decorators (`Retry`,
+`Repeat`, `Timeout`, `Inverter`, …) and the condition and blackboard behaviours
+(`SetBlackboardVariable`, `CheckBlackboardVariableValue`, …), but only where the command
+asks for what they do.
 
 ## Who decides what
 
@@ -256,13 +259,15 @@ next to it.
 
 It is a *static* test. The only thing executed is the construction of the tree itself,
 with the four actions replaced by inert stand-ins — which is the only way to prove the
-function really returns a tree.
+function really returns a tree. The decorators, composites and behaviours are the real
+py_trees ones, and they remember the arguments they were built with so the tree can be
+described afterwards.
 
 | Group | Checks |
 |---|---|
 | Syntax | the code parses; there is exactly one `create_behavior_tree`; nothing else at top level |
-| Structure | the body is one `try/except` with the mandated `logging.error` line; the root is a `Sequence` named `Root`; every composite has `memory=True`; node names and variables are unique; no orphaned node, no node with two parents, no child that was never created |
-| Arguments | every action gets exactly its own keyword arguments; `Shake(times=…)` is an integer literal; every node has a literal name |
+| Structure | the body is one `try/except` with the mandated `logging.error` line; the root is a `Sequence` named `Root`; every composite has `memory=True`; only the nodes the prompt allows are used (the four actions, `Sequence`, `Selector`, the listed decorators and behaviours); node names and variables are unique; no orphaned node, no node with two parents (a decorator's `child=` counts as its parent), no child that was never created |
+| Arguments | every action, decorator and behaviour gets exactly its own keyword arguments; counts (`Shake(times=…)`, `Retry(num_failures=…)`, `Repeat(num_success=…)`) are integer literals; every node has a literal name |
 | Scene | every object id exists in the scene, spelled exactly; locations are used as locations and graspable objects are grasped |
 | Build | the function loads, constructs, and returns a real `py_trees` node with the expected number of nodes |
 
@@ -343,31 +348,31 @@ Without it nothing is lost — the PNG and the canvas do not need graphviz.
 
 ## The prompts
 
-The two prompts are in [prompts](prompts). The *Robot and workspace* and *Actions*
-sections, which both models read, and the judge's *Physical facts* live in their own
-files, and the main prompts only point at them:
+The two prompts are in [prompts](prompts):
 
 ```
 prompts/
-├── bt_generation_prompt.txt     {{include: robot_and_workspace.txt}}
-│                                {{include: actions.txt}}
+├── bt_generation_prompt.txt     the generator's prompt, written out in full
 ├── semantic_judge_prompt.txt    {{include: robot_and_workspace.txt}}
 │                                {{include: actions.txt}}
 │                                {{include: judge_physical_facts.txt}}
-├── robot_and_workspace.txt      the robot and the axes, shared by both prompts
-├── actions.txt                  the four actions, shared by both prompts
+├── robot_and_workspace.txt      the robot and the axes
+├── actions.txt                  the four actions
 └── judge_physical_facts.txt     the facts a tree must respect, for the judge only
 ```
 
-A line `{{include: file.txt}}` is replaced by that file's text when the prompt is loaded
-([modules/prompt_files.py](modules/prompt_files.py)), so the model receives one continuous
-prompt. The path is relative to the file that contains the line. The robot and the
-actions are described once, so the generator and the judge are told the same thing;
-changing either file changes both prompts. The generator has no physical-facts file on
-purpose: it only translates, and physical rules belong to the judge. For that reason the
-actions are described neutrally (what each takes and what it needs to be), and the rules
-about when an action is possible, such as "one cap closes one container", are in the
-judge's physical facts.
+The generation prompt lists the four actions, the decorators and the condition and
+blackboard behaviours itself, with the rules for building the tree, so it no longer
+includes the shared files. The judge prompt still assembles its *Robot and workspace*,
+*Actions* and *Physical facts* sections from them. A line `{{include: file.txt}}` is
+replaced by that file's text when the prompt is loaded
+([modules/prompt_files.py](modules/prompt_files.py)); the path is relative to the file
+that contains the line. The generator has no physical facts on purpose: it only
+translates, and physical rules belong to the judge.
+
+The judge reads decorators and conditions from its tree outline: a decorator is shown
+with its arguments and the node it wraps indented under it, and the judge prompt explains
+what `Retry`, `Inverter`, `Timeout` and the others do.
 
 ## Settings
 
