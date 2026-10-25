@@ -331,6 +331,29 @@ brew install graphviz
 
 Without it nothing is lost — the PNG and the canvas do not need graphviz.
 
+## The prompts
+
+The two prompts are in [prompts](prompts). The generation and judge prompts both have
+an *Actions* section, and the judge prompt has a *Physical facts* section. These live in
+their own files and the main prompts only point at them:
+
+```
+prompts/
+├── bt_generation_prompt.txt     {{include: generation_actions.txt}}
+├── generation_actions.txt       the four actions as the generator writes them
+├── semantic_judge_prompt.txt    {{include: judge_actions.txt}}
+│                                {{include: judge_physical_facts.txt}}
+├── judge_actions.txt            the four actions as the judge checks them
+└── judge_physical_facts.txt     the facts a tree must respect
+```
+
+A line `{{include: file.txt}}` is replaced by that file's text when the prompt is loaded
+([modules/prompt_files.py](modules/prompt_files.py)), so the model receives one continuous
+prompt. The path is relative to the file that contains the line. The generator has no
+physical-facts file on purpose: it only translates, and physical rules belong to the
+judge. The two action files are kept apart because their wording differs: the generator
+passes a `name`, the judge is told when each action is possible.
+
 ## Settings
 
 All of them are in [config.py](config.py): where the scenes and prompts are read from,
