@@ -56,13 +56,12 @@ One node per line, children indented under their parent.
   brackets.
 Judge each action by its type and arguments. Node names are labels written by the tree's
 author and can be wrong.
+
+
 How to judge
 Decide for yourself what needs to be checked for this command and this tree, then
 check the tree against each point. Base your judgement on the scene list, the actions
 and the physical facts above.
-Users often call objects by other names, such as "tray" or "container" for a box, or
-"block" for a cube or package. When the original and the rewritten command disagree,
-the original command is what the user wants.
 Do not rewrite the tree.
 
 Answer
