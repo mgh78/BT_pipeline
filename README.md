@@ -334,8 +334,19 @@ run's attempts.
 
 The layout is computed once and used three ways: the canvas in the window (zoom, pan,
 click a node to see its arguments), `bt_graph.png` drawn with Pillow, and
-`bt_graph.dot`. A sequence carries an arrow, a selector a question mark, and actions
-are green boxes listing their arguments.
+`bt_graph.dot`. Every node type has its own colour, and a **legend** under the tree
+declares them, in the canvas, in `bt_graph.png` and in the `.dot` file:
+
+| Node | Colour | Symbol | Meaning |
+|---|---|---|---|
+| Sequence | blue | `→` | runs its children in order and stops at the first failure |
+| Selector | orange | `?` | tries its children in order until one succeeds |
+| Action | green | — | a robot action: Place, Pour, Shake or Close; the box lists its arguments |
+| Decorator | purple | — | wraps the node under it and changes how it runs or what it returns; the class name is under the title |
+| Condition / blackboard | yellow | — | checks or sets a blackboard value, or always succeeds or fails |
+
+The legend lists only the node types that the tree actually contains. The colours are
+`GRAPH_COLORS` in [config.py](config.py).
 
 The `.dot` file is written always. When the graphviz `dot` binary is installed, a
 `bt_graph_graphviz.png` is rendered from it as well:
