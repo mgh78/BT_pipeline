@@ -334,30 +334,30 @@ Without it nothing is lost — the PNG and the canvas do not need graphviz.
 ## The prompts
 
 The two prompts are in [prompts](prompts). The *Robot and workspace* and *Actions*
-sections, and the judge's *Physical facts*, live in their own files and the main prompts
-only point at them:
+sections, which both models read, and the judge's *Physical facts* live in their own
+files, and the main prompts only point at them:
 
 ```
 prompts/
 ├── bt_generation_prompt.txt     {{include: robot_and_workspace.txt}}
-│                                {{include: generation_actions.txt}}
+│                                {{include: actions.txt}}
 ├── semantic_judge_prompt.txt    {{include: robot_and_workspace.txt}}
-│                                {{include: judge_actions.txt}}
+│                                {{include: actions.txt}}
 │                                {{include: judge_physical_facts.txt}}
 ├── robot_and_workspace.txt      the robot and the axes, shared by both prompts
-├── generation_actions.txt       the four actions as the generator writes them
-├── judge_actions.txt            the four actions as the judge checks them
-└── judge_physical_facts.txt     the facts a tree must respect
+├── actions.txt                  the four actions, shared by both prompts
+└── judge_physical_facts.txt     the facts a tree must respect, for the judge only
 ```
 
 A line `{{include: file.txt}}` is replaced by that file's text when the prompt is loaded
 ([modules/prompt_files.py](modules/prompt_files.py)), so the model receives one continuous
-prompt. The path is relative to the file that contains the line. The robot and workspace
-text is the same for both models, so it is one file; changing it changes both prompts.
-The two action files are kept apart because their wording differs: the generator passes
-a `name`, the judge is told when each action is possible. The generator has no
-physical-facts file on purpose: it only translates, and physical rules belong to the
-judge.
+prompt. The path is relative to the file that contains the line. The robot and the
+actions are described once, so the generator and the judge are told the same thing;
+changing either file changes both prompts. The generator has no physical-facts file on
+purpose: it only translates, and physical rules belong to the judge. For that reason the
+actions are described neutrally (what each takes and what it needs to be), and the rules
+about when an action is possible, such as "one cap closes one container", are in the
+judge's physical facts.
 
 ## Settings
 
