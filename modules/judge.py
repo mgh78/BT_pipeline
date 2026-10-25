@@ -73,7 +73,8 @@ class SemanticJudge:
 
     def describe(self):
         """What is recorded about this judge in the run's summary."""
-        return {'model': self.model, 'temperature': self.temperature,
+        return {'model': self.model,
+                'temperature': llm.temperature_for(self.model, self.temperature),
                 'reasoning_effort': llm.reasoning_effort_for(
                     self.model, self.reasoning_effort),
                 'structured_output': self.structured,

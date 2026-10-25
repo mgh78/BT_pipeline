@@ -44,7 +44,12 @@ def reasoning_effort_for(model, effort):
     return effort if model in config.RESPONSES_API_MODELS else None
 
 
-def _responses_arguments(model, temperature, system_prompt, user_content, response_format,
+def temperature_for(model, temperature):
+    """The temperature that is really sent: a Responses API model refuses one."""
+    return None if model in config.RESPONSES_API_MODELS else temperature
+
+
+def _responses_arguments(model, system_prompt, user_content, response_format,
                          reasoning_effort):
     """The same request, written for the Responses API."""
     content = []
@@ -56,7 +61,6 @@ def _responses_arguments(model, temperature, system_prompt, user_content, respon
             content.append({'type': 'input_text', 'text': part['text']})
     arguments = {
         'model': model,
-        'temperature': temperature,
         'instructions': system_prompt,
         'input': [{'role': 'user', 'content': content}],
     }
@@ -113,7 +117,8 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
     Args:
         system_prompt: the developer message, the whole instruction set.
         text: the user message - the command.
-        model, temperature: which model to ask and how deterministic to be.
+        model, temperature: which model to ask and how deterministic to be. A model
+            called through the Responses API is sent no temperature.
         logger: the calling module's logger, so the call appears in its own log file.
         context: the RunContext, when the prompt and reply should be saved as artifacts.
         image_path: a scene photo to attach to the user message.
@@ -146,14 +151,15 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
     logging_setup.event(
         logger, 'llm.request', f'asking {model} ({len(system_prompt)} chars of prompt'
                                f'{", photo attached" if image_url else ""})',
-        model=model, temperature=temperature, prompt_chars=len(system_prompt),
+        model=model, temperature=temperature_for(model, temperature),
+        prompt_chars=len(system_prompt),
         image=bool(image_url), user_text=str(text),
         reasoning_effort=reasoning_effort_for(model, reasoning_effort))
 
     client = OpenAI(api_key=load_api_key())
     use_responses = model in config.RESPONSES_API_MODELS
     if use_responses:
-        arguments = _responses_arguments(model, temperature, system_prompt, user_content,
+        arguments = _responses_arguments(model, system_prompt, user_content,
                                          response_format, reasoning_effort)
         create = client.responses.create
     else:

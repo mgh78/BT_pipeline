@@ -82,7 +82,8 @@ class BTGenerator:
 
     def describe(self):
         """What is recorded about this generator in the run's summary."""
-        return {'model': self.model, 'temperature': self.temperature,
+        return {'model': self.model,
+                'temperature': llm.temperature_for(self.model, self.temperature),
                 'reasoning_effort': llm.reasoning_effort_for(
                     self.model, self.reasoning_effort),
                 'scene_image': config.BT_GENERATION_SEND_SCENE_IMAGE}

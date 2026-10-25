@@ -90,17 +90,23 @@ def test_other_models_keep_chat_completions_and_get_no_effort(client):
     assert 'reasoning' not in arguments and 'reasoning_effort' not in arguments
 
 
-def test_temperature_is_dropped_when_the_model_refuses_it(client):
+def test_luna_is_sent_no_temperature_so_nothing_is_retried(client):
     client.refuse_temperature = True
     ask('gpt-6-luna', reasoning_effort='medium')
     calls = client.instances[0].calls
-    assert 'temperature' in calls[0][1] and 'temperature' not in calls[1][1]
-    assert calls[1][1]['reasoning'] == {'effort': 'medium'}
+    assert len(calls) == 1 and 'temperature' not in calls[0][1]
+
+
+def test_other_models_still_get_their_temperature(client):
+    ask('gpt-4o')
+    assert client.instances[0].calls[0][1]['temperature'] == 0
 
 
 def test_the_effort_is_recorded_only_for_a_model_that_uses_it():
     assert llm.reasoning_effort_for('gpt-6-luna', 'medium') == 'medium'
     assert llm.reasoning_effort_for('gpt-4o', 'medium') is None
+    assert llm.temperature_for('gpt-6-luna', 0) is None
+    assert llm.temperature_for('gpt-4o', 0) == 0
     assert 'gpt-6-luna' in config.AVAILABLE_MODELS
 
 
@@ -115,5 +121,6 @@ def test_the_effort_chosen_for_a_run_reaches_the_model_call(client):
                for instance in client.instances]
     assert efforts == ['low', 'high']
     assert BTGenerator(model='gpt-6-luna').describe()['reasoning_effort'] == 'medium'
+    assert BTGenerator(model='gpt-6-luna').describe()['temperature'] is None
     assert BTGenerator(model='gpt-4o', reasoning_effort='low').describe()[
         'reasoning_effort'] is None

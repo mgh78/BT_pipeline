@@ -87,7 +87,8 @@ class EnrichmentStage(Stage):
         model = payload.get('enrichment_model') or config.ENRICHMENT_MODEL
         payload['enrichment_on'] = True
         payload['enrichment'] = {'model': model,
-                                 'temperature': config.ENRICHMENT_TEMPERATURE,
+                                 'temperature': llm.temperature_for(
+                                     model, config.ENRICHMENT_TEMPERATURE),
                                  'reasoning_effort': llm.reasoning_effort_for(
                                      model, config.ENRICHMENT_REASONING_EFFORT),
                                  'scene_image': config.ENRICHMENT_SEND_SCENE_IMAGE}
