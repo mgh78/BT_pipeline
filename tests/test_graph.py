@@ -68,3 +68,45 @@ def test_a_saved_tree_can_be_redrawn(built):
     again = graph.from_dict(saved)
     assert [n.kind for n in again.walk()] == [n.kind for n in graph.from_py_trees(built).walk()]
     assert again.children[0].type_name == 'Retry'
+
+
+# --- the legend ----------------------------------------------------------------
+
+def test_the_legend_lists_only_the_node_types_in_the_tree(built):
+    layout = graph.layout(graph.from_py_trees(built))
+    assert [row.kind for row in layout.legend] == ['sequence', 'action', 'decorator',
+                                                   'behaviour']
+    assert [row.name for row in layout.legend][:2] == ['Sequence', 'Action']
+
+
+def test_the_legend_sits_under_the_tree_and_inside_the_drawing(built):
+    layout = graph.layout(graph.from_py_trees(built))
+    tree_bottom = max(node.bottom for node in layout.nodes)
+    assert layout.legend_title_y > tree_bottom
+    assert all(row.y > layout.legend_title_y for row in layout.legend)
+    assert max(row.y + graph.SWATCH_HEIGHT for row in layout.legend) < layout.height
+    # Every node and every legend line fits in the width of the drawing.
+    assert all(0 <= node.left and node.right <= layout.width for node in layout.nodes)
+    assert all(row.description_x < layout.width for row in layout.legend)
+
+
+def test_the_meanings_line_up_in_one_column(built):
+    layout = graph.layout(graph.from_py_trees(built))
+    assert len({row.description_x for row in layout.legend}) == 1
+
+
+def test_the_image_is_as_big_as_the_layout_with_its_legend(built, tmp_path):
+    from PIL import Image
+    layout = graph.layout(graph.from_py_trees(built))
+    graph.render_png(layout, tmp_path / 'tree.png', scale=1)
+    with Image.open(tmp_path / 'tree.png') as image:
+        assert image.size == (int(layout.width), int(layout.height))
+
+
+def test_the_dot_file_declares_the_legend(built):
+    dot = graph.to_dot(graph.layout(graph.from_py_trees(built)))
+    assert 'cluster_legend' in dot
+    for kind in ('sequence', 'action', 'decorator', 'behaviour'):
+        assert f'legend_{kind}' in dot
+    assert 'legend_selector' not in dot          # this tree has no selector
+    assert 'Condition / blackboard' in dot

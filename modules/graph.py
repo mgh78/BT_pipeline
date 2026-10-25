@@ -11,7 +11,8 @@ and is then used by
 Nodes are drawn with the usual behavior tree conventions: a sequence carries an arrow,
 a selector a question mark, and actions are rounded boxes listing their arguments. A
 decorator is drawn in its own colour with its class name under the title, and the
-condition and blackboard behaviours are drawn the same way.
+condition and blackboard behaviours are drawn the same way. A legend under the tree
+names the colour and symbol of every node type that appears in it.
 """
 
 import html
@@ -34,6 +35,23 @@ ARGUMENT_HEIGHT = 16
 MARGIN = 30
 TITLE_CHAR_WIDTH = 7.6     # approximate advance of the title font
 ARGUMENT_CHAR_WIDTH = 6.2  # approximate advance of the argument font
+
+# The node types, in the order the legend lists them: (kind, name, what it means).
+LEGEND = (
+    ('sequence', 'Sequence', 'runs its children in order and stops at the first failure'),
+    ('selector', 'Selector', 'tries its children in order until one succeeds'),
+    ('action', 'Action', 'a robot action: Place, Pour, Shake or Close'),
+    ('decorator', 'Decorator',
+     'wraps the node under it and changes how it runs or what it returns'),
+    ('behaviour', 'Condition / blackboard',
+     'checks or sets a blackboard value, or always succeeds or fails'),
+)
+LEGEND_TITLE_HEIGHT = 22
+LEGEND_ROW_HEIGHT = 26
+LEGEND_GAP = 16                # between the tree and its legend
+SWATCH_WIDTH = 36
+SWATCH_HEIGHT = 18
+SWATCH_TEXT_GAP = 10
 
 MARKERS = {'sequence': '\u2192', 'selector': '?', 'action': '', 'decorator': '',
            'behaviour': ''}
@@ -92,12 +110,31 @@ class GraphNode:
 
 
 @dataclass
+class LegendRow:
+    """One line of the legend: a swatch in the node's colours, its name and its meaning."""
+
+    kind: str
+    name: str
+    description: str
+    x: float                       # left edge of the swatch
+    y: float                       # top of the swatch
+    name_x: float
+    description_x: float
+
+
+@dataclass
 class GraphLayout:
-    """A laid-out tree: the root box plus the size of the drawing around it."""
+    """A laid-out tree: the root box plus the size of the drawing around it.
+
+    The drawing also holds the legend under the tree, so ``width`` and ``height`` include
+    it and every renderer draws the same picture.
+    """
 
     root: GraphNode
     width: float
     height: float
+    legend: list = field(default_factory=list)
+    legend_title_y: float = 0.0
 
     @property
     def nodes(self):
@@ -209,9 +246,31 @@ def layout(root):
 
     measure(root)
     place(root, MARGIN, MARGIN)
-    width = root.subtree_width + 2 * MARGIN
-    height = max(node.bottom for node in root.walk()) + MARGIN
-    return GraphLayout(root=root, width=width, height=height)
+    tree_width = root.subtree_width + 2 * MARGIN
+    tree_height = max(node.bottom for node in root.walk()) + MARGIN
+
+    # The legend names only the node types this tree uses.
+    kinds = {node.kind for node in root.walk()}
+    legend_title_y = tree_height + LEGEND_GAP
+    rows, legend_width = [], 0.0
+    top = legend_title_y + LEGEND_TITLE_HEIGHT
+    entries = [entry for entry in LEGEND if entry[0] in kinds]
+    name_x = MARGIN + SWATCH_WIDTH + SWATCH_TEXT_GAP
+    # One column for the meanings, so they line up whatever the names' lengths.
+    description_x = name_x + max((len(name) for _, name, _ in entries),
+                                 default=0) * TITLE_CHAR_WIDTH + SWATCH_TEXT_GAP
+    for kind, name, description in entries:
+        rows.append(LegendRow(kind, name, description, MARGIN, top, name_x, description_x))
+        legend_width = max(legend_width,
+                           description_x + len(description) * ARGUMENT_CHAR_WIDTH + MARGIN)
+        top += LEGEND_ROW_HEIGHT
+
+    width = max(tree_width, legend_width)
+    for node in root.walk():           # centre the tree when the legend is the wider one
+        node.x += (width - tree_width) / 2
+    height = top + MARGIN / 2
+    return GraphLayout(root=root, width=width, height=height, legend=rows,
+                       legend_title_y=legend_title_y)
 
 
 # --- Pillow rendering ---------------------------------------------------------
@@ -275,8 +334,33 @@ def render_png(graph_layout, path, scale=2):
                       font=argument_font, fill=colors['subtext'], anchor='lm')
             offset += ARGUMENT_HEIGHT
 
+    _draw_legend(draw, graph_layout, colors, scale, title_font, argument_font)
+
     image.save(path)
     return path
+
+
+def _draw_legend(draw, graph_layout, colors, scale, title_font, argument_font):
+    """The legend under the tree: what each colour and symbol stands for."""
+    if not graph_layout.legend:
+        return
+    draw.text((MARGIN * scale, (graph_layout.legend_title_y + LEGEND_TITLE_HEIGHT / 2) * scale),
+              'Legend', font=title_font, fill=colors['subtext'], anchor='lm')
+    for row in graph_layout.legend:
+        middle = (row.y + SWATCH_HEIGHT / 2) * scale
+        draw.rounded_rectangle(
+            [row.x * scale, row.y * scale, (row.x + SWATCH_WIDTH) * scale,
+             (row.y + SWATCH_HEIGHT) * scale],
+            radius=int(5 * scale), fill=colors[f'{row.kind}_fill'],
+            outline=colors[f'{row.kind}_border'], width=max(1, int(1.6 * scale)))
+        marker = MARKERS.get(row.kind, '')
+        if marker:
+            draw.text(((row.x + SWATCH_WIDTH / 2) * scale, middle), marker,
+                      font=title_font, fill=colors['text'], anchor='mm')
+        draw.text((row.name_x * scale, middle), row.name, font=title_font,
+                  fill=colors['text'], anchor='lm')
+        draw.text((row.description_x * scale, middle), row.description,
+                  font=argument_font, fill=colors['subtext'], anchor='lm')
 
 
 # --- DOT and graphviz ---------------------------------------------------------
@@ -311,6 +395,24 @@ def to_dot(graph_layout, title=''):
 
     for parent, child in graph_layout.edges:
         lines.append(f'    {parent.id} -> {child.id};')
+
+    if graph_layout.legend:
+        lines += ['    subgraph cluster_legend {',
+                  '        label="Legend"; fontname="Helvetica"; fontsize=10; '
+                  'style="rounded"; color="#bbbbbb";']
+        previous = None
+        for row in graph_layout.legend:
+            marker = f'{MARKERS[row.kind]} ' if MARKERS.get(row.kind) else ''
+            text = html.escape(f'{marker}{row.name}')
+            lines.append(
+                f'        legend_{row.kind} [label=<{text}<BR/><FONT POINT-SIZE="9" '
+                f'COLOR="#444444">{html.escape(row.description)}</FONT>>, shape=box, '
+                f'fillcolor="{_light(colors[f"{row.kind}_fill"])}", '
+                f'color="{colors[f"{row.kind}_border"]}"];')
+            if previous:
+                lines.append(f'        {previous} -> legend_{row.kind} [style=invis];')
+            previous = f'legend_{row.kind}'
+        lines.append('    }')
     lines.append('}')
     return '\n'.join(lines)
 
