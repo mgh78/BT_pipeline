@@ -102,3 +102,18 @@ def test_the_effort_is_recorded_only_for_a_model_that_uses_it():
     assert llm.reasoning_effort_for('gpt-6-luna', 'medium') == 'medium'
     assert llm.reasoning_effort_for('gpt-4o', 'medium') is None
     assert 'gpt-6-luna' in config.AVAILABLE_MODELS
+
+
+def test_the_effort_chosen_for_a_run_reaches_the_model_call(client):
+    from modules.generator import BTGenerator
+    from modules.judge import SemanticJudge
+
+    scene = types.SimpleNamespace(objects_block=lambda: '- a: cube', image_path=None)
+    BTGenerator(model='gpt-6-luna', reasoning_effort='low').ask('go', scene)
+    SemanticJudge(model='gpt-6-luna', reasoning_effort='high').ask('go', scene)
+    efforts = [instance.calls[0][1]['reasoning']['effort']
+               for instance in client.instances]
+    assert efforts == ['low', 'high']
+    assert BTGenerator(model='gpt-6-luna').describe()['reasoning_effort'] == 'medium'
+    assert BTGenerator(model='gpt-4o', reasoning_effort='low').describe()[
+        'reasoning_effort'] is None

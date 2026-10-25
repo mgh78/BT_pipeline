@@ -28,8 +28,9 @@ class BTGenerator:
     name = 'generator'
     title = 'Behavior tree'
 
-    def __init__(self, model=None, temperature=None):
+    def __init__(self, model=None, temperature=None, reasoning_effort=None):
         self.model = model or config.BT_GENERATION_MODEL
+        self.reasoning_effort = reasoning_effort or config.BT_GENERATION_REASONING_EFFORT
         self.temperature = (config.BT_GENERATION_TEMPERATURE if temperature is None
                             else temperature)
         self.log = log
@@ -75,12 +76,15 @@ class BTGenerator:
             logger=self.log,
             context=context,
             image_path=image,
-            tag=tag)
+            tag=tag,
+            reasoning_effort=self.reasoning_effort)
         return reply['text']
 
     def describe(self):
         """What is recorded about this generator in the run's summary."""
         return {'model': self.model, 'temperature': self.temperature,
+                'reasoning_effort': llm.reasoning_effort_for(
+                    self.model, self.reasoning_effort),
                 'scene_image': config.BT_GENERATION_SEND_SCENE_IMAGE}
 
 

@@ -52,7 +52,9 @@ class GenerationLoopStage(Stage):
             raise StageError('There is no command to generate a tree from.')
         payload['generator_input'] = command
 
-        generator = BTGenerator(model=payload.get('generation_model'))
+        generator = BTGenerator(
+            model=payload.get('generation_model'),
+            reasoning_effort=payload.get('generation_reasoning_effort'))
         tester = SyntaxTestStage()
         artifacts = {}
 
@@ -61,7 +63,9 @@ class GenerationLoopStage(Stage):
         judge_enabled = payload.get('judge_enabled')
         if judge_enabled is None:
             judge_enabled = config.JUDGE_ENABLED
-        judge = SemanticJudge(model=payload.get('judge_model')) if judge_enabled else None
+        judge = (SemanticJudge(model=payload.get('judge_model'),
+                               reasoning_effort=payload.get('judge_reasoning_effort'))
+                 if judge_enabled else None)
         if not judge_enabled:
             self.log.info('baseline run: the judge is switched off')
 

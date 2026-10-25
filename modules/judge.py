@@ -25,8 +25,10 @@ class SemanticJudge:
     name = 'judge'
     title = 'Semantic judge'
 
-    def __init__(self, model=None, temperature=None, use_structured_output=None):
+    def __init__(self, model=None, temperature=None, use_structured_output=None,
+                 reasoning_effort=None):
         self.model = model or config.JUDGE_MODEL
+        self.reasoning_effort = reasoning_effort or config.JUDGE_REASONING_EFFORT
         self.temperature = (config.JUDGE_TEMPERATURE if temperature is None
                             else temperature)
         self.structured = (config.JUDGE_USE_STRUCTURED_OUTPUT
@@ -65,12 +67,15 @@ class SemanticJudge:
             context=context,
             image_path=image,
             tag=tag,
-            response_format=loop.RESPONSE_FORMAT if self.structured else None)
+            response_format=loop.RESPONSE_FORMAT if self.structured else None,
+            reasoning_effort=self.reasoning_effort)
         return reply['text']
 
     def describe(self):
         """What is recorded about this judge in the run's summary."""
         return {'model': self.model, 'temperature': self.temperature,
+                'reasoning_effort': llm.reasoning_effort_for(
+                    self.model, self.reasoning_effort),
                 'structured_output': self.structured,
                 'scene_image': config.JUDGE_SEND_SCENE_IMAGE}
 

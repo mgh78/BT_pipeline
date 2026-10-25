@@ -88,6 +88,8 @@ class EnrichmentStage(Stage):
         payload['enrichment_on'] = True
         payload['enrichment'] = {'model': model,
                                  'temperature': config.ENRICHMENT_TEMPERATURE,
+                                 'reasoning_effort': llm.reasoning_effort_for(
+                                     model, config.ENRICHMENT_REASONING_EFFORT),
                                  'scene_image': config.ENRICHMENT_SEND_SCENE_IMAGE}
 
         reply = llm.ask(
@@ -98,7 +100,8 @@ class EnrichmentStage(Stage):
             logger=self.log,
             context=context,
             image_path=image,
-            tag='enrichment')
+            tag='enrichment',
+            reasoning_effort=config.ENRICHMENT_REASONING_EFFORT)
 
         enriched = reply['text'].strip().strip('"')
         if not enriched:
