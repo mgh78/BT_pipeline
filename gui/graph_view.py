@@ -197,5 +197,34 @@ class GraphView(customtkinter.CTkFrame):
                 self._items[item] = node
                 offset += graph_module.ARGUMENT_HEIGHT
 
+        self._draw_legend(colors, scale, title_size, argument_size)
         self.canvas.configure(scrollregion=(0, 0, self.layout.width * scale,
                                             self.layout.height * scale))
+
+    def _draw_legend(self, colors, scale, title_size, argument_size):
+        """The legend under the tree: what each colour and symbol stands for."""
+        if not self.layout.legend:
+            return
+        self.canvas.create_text(
+            graph_module.MARGIN * scale,
+            (self.layout.legend_title_y + graph_module.LEGEND_TITLE_HEIGHT / 2) * scale,
+            text='Legend', anchor='w', fill=colors['subtext'],
+            font=('Arial', title_size, 'bold'))
+        for row in self.layout.legend:
+            middle = (row.y + graph_module.SWATCH_HEIGHT / 2) * scale
+            self.canvas.create_rectangle(
+                row.x * scale, row.y * scale,
+                (row.x + graph_module.SWATCH_WIDTH) * scale,
+                (row.y + graph_module.SWATCH_HEIGHT) * scale,
+                fill=colors[f'{row.kind}_fill'], outline=colors[f'{row.kind}_border'],
+                width=max(1, int(1.5 * scale)))
+            marker = graph_module.MARKERS.get(row.kind, '')
+            if marker:
+                self.canvas.create_text(
+                    (row.x + graph_module.SWATCH_WIDTH / 2) * scale, middle, text=marker,
+                    fill=colors['text'], font=('Arial', title_size, 'bold'))
+            self.canvas.create_text(row.name_x * scale, middle, text=row.name, anchor='w',
+                                    fill=colors['text'], font=('Arial', title_size, 'bold'))
+            self.canvas.create_text(row.description_x * scale, middle, text=row.description,
+                                    anchor='w', fill=colors['subtext'],
+                                    font=('Arial', argument_size))
