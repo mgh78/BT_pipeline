@@ -9,11 +9,7 @@ before it runs and sends it back to you with its findings if something is wrong.
 
 Robot and workspace
 The robot is an arm with a gripper, working at a table. Each action is high-level and
-handles approaching, grasping, moving and releasing by itself, so a tree never needs
-separate pick-up, move or release steps.
-Objects that hold or support other objects (boxes, crates, bowls, palettes, racks, tube
-holders) are fixed in place. They cannot be grasped or moved; they are only used as a
-place to put something or as a container to pour into.
+handles approaching, grasping, moving and releasing by itself.
 Positions are in metres. A higher y is further to the right, a lower y further to the
 left. A higher x is further from the robot base. z is the height above the table.
 
@@ -42,8 +38,7 @@ Finding the objects
 - If several objects fit and they are identical in everything the command depends on,
   take the one with the lowest index. The same holds for a number: "two red cuboids"
   when there are four identical red cuboids means the two with the lowest indices.
-- A plural reference such as "all the red cuboids" or "both cubes" becomes one action
-  per matching object, ordered left to right by y, then near to far by x.
+
 
 Building the tree
 - The root is always py_trees.composites.Sequence(name="Root", memory=True), even for a
@@ -84,8 +79,7 @@ Conditions and repetition
 A condition about something the scene list states - a color, a liquid, a position - is
 decided by you while you build the tree, not by the robot while it runs. Work out which
 objects meet it and include the actions only for those; leave the others out entirely.
-"Each", "every" or "the next one" means one action per matching object, ordered left to
-right by y, then near to far by x.
+
 
 Follow-up messages
 The user message always starts with COMMAND:. It may continue with:
