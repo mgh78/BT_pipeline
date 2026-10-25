@@ -67,8 +67,8 @@ JUDGE_SEND_SCENE_IMAGE = False  # keep equal to BT_GENERATION_SEND_SCENE_IMAGE
 JUDGE_USE_STRUCTURED_OUTPUT = True
 
 # Turning the judge off gives the baseline: the pipeline runs exactly as it does with
-# the judge, up to the point where the judge would decide, and the first tree that
-# passes the syntax check is the result. That is the condition the judged runs are
+# the judge, syntax repairs included, up to the point where the judge would decide, and
+# the first tree that passes the syntax check is the result. That is the condition the judged runs are
 # compared against, so nothing else about the run may differ.
 JUDGE_ENABLED = True
 

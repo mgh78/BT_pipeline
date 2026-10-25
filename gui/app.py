@@ -199,7 +199,7 @@ class App(customtkinter.CTk):
         self.enrich_switch.select()
         self.enrich_switch.grid(row=0, column=0, sticky='w')
 
-        # Judge: the loop repairs a rejected tree. Baseline: one tree, not judged.
+        # Judge: the loop also repairs a rejected tree. Baseline: syntax repairs only, no judge.
         self.mode_selector = customtkinter.CTkSegmentedButton(
             switches, values=[JUDGE_MODE, BASELINE_MODE], font=('Arial', 11),
             command=self.mode_changed)
@@ -328,7 +328,8 @@ class App(customtkinter.CTk):
         if mode == JUDGE_MODE:
             self.status('Judge: a rejected tree is sent back for repair, up to three.')
         else:
-            self.status('Baseline: one tree, checked but not judged, and no repairs.',
+            self.status('Baseline: a tree that fails the syntax check is repaired, but '
+                        'the tree that runs is not judged.',
                         warn=True)
 
     def _scene_changed(self, scene_number):

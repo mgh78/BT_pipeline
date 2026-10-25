@@ -58,8 +58,8 @@ class GenerationLoopStage(Stage):
         tester = SyntaxTestStage()
         artifacts = {}
 
-        # With the judge switched off this is the baseline: generate once, check the
-        # code can run, draw it. Nothing judges the tree and nothing is repaired.
+        # With the judge switched off this is the baseline: a syntax failure is still sent
+        # back to the generator, but nothing judges the tree that finally runs.
         judge_enabled = payload.get('judge_enabled')
         if judge_enabled is None:
             judge_enabled = config.JUDGE_ENABLED

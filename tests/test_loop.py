@@ -201,7 +201,7 @@ def test_three_invalid_forms_end_the_run(run):
     assert record['accepted_tree'] is None
 
 
-# --- the baseline: no judge, no loop -----------------------------------------
+# --- the baseline: no judge, syntax repairs still run ------------------------
 
 def test_baseline_keeps_the_first_tree_unjudged(run):
     # The tree shakes an open tube, which the judge would reject. Nothing judges it.
@@ -214,18 +214,32 @@ def test_baseline_keeps_the_first_tree_unjudged(run):
     assert record['attempts'][0]['judge_form'] is None
 
 
-def test_baseline_does_not_repair_a_syntax_failure(run):
-    record, scripted, _ = run([TREE_WITH_WRONG_ID], judge_enabled=False)
-    assert record['status'] == 'failed_syntax_cap'
-    # One attempt only: with no judge there is nothing to repair towards.
-    assert record['counts']['generator_calls'] == 1
+def test_baseline_repairs_a_syntax_failure(run):
+    record, scripted, _ = run([TREE_WITH_WRONG_ID, GOOD_TREE], judge_enabled=False)
+    assert record['status'] == 'no_judge'
+    assert record['counts']['generator_calls'] == 2
     assert record['counts']['syntax_failures'] == 1
+    assert record['counts']['judge_calls'] == 0
+
+    second = scripted.messages('generator')[1]
+    assert 'SYNTAX CHECK ERRORS:' in second
+    assert 'transparent_test_tube_9' in second
+    assert not scripted.messages('judge')
 
 
-def test_baseline_does_not_ask_again_for_missing_code(run):
-    record, _, _ = run([NO_CODE], judge_enabled=False)
+def test_baseline_asks_again_for_missing_code(run):
+    record, _, _ = run([NO_CODE, GOOD_TREE], judge_enabled=False)
+    assert record['status'] == 'no_judge'
+    assert record['counts']['generator_calls'] == 2
+    assert record['attempts'][0]['kind'] == 'no_code'
+
+
+def test_three_syntax_failures_end_a_baseline_run(run):
+    record, scripted, _ = run([TREE_WITH_WRONG_ID] * 3, judge_enabled=False)
     assert record['status'] == 'failed_syntax_cap'
-    assert record['counts']['generator_calls'] == 1
+    assert record['counts']['generator_calls'] == 3
+    assert record['counts']['syntax_failures'] == 3
+    assert not scripted.messages('judge')
 
 
 # --- what the run leaves behind ----------------------------------------------

@@ -101,20 +101,21 @@ The second switch under the command turns the judge off. That is the baseline th
 judged runs are compared against, so everything before the judge stays identical —
 same scene, same enrichment, same generation prompt, same syntax check.
 
-With the judge off there is **no loop at all**: there is nothing to repair towards, so
-the run is a single pass.
+With the judge off the syntax repair still runs: a tree that fails the syntax check is
+sent back to the generator with the errors, exactly as in a judged run. The only thing
+missing is the judge.
 
 | | Judge on | Judge off (baseline) |
 |---|---|---|
-| Generator calls | up to 3 | exactly 1 |
+| A failed syntax check | sent back with the errors, up to 3 trees | the same |
 | A tree that passes the syntax check | goes to the judge | **is the result** |
 | A rejected tree | sent back with the form | — |
-| A failed syntax check | sent back with the errors, up to 3 trees | ends the run |
+| Generator calls | up to 3 syntax failures, and up to 3 rejections | up to 3, all for syntax failures |
 | Final status | `accepted`, `failed_judge_cap`, `failed_syntax_cap`, `judge_error` | `no_judge` or `failed_syntax_cap` |
 
-So a baseline run shows you what the BT creator produces on its own — including the
-faults the judge would have caught. A tree that shakes an open test tube is simply
-drawn and kept.
+So a baseline run shows you what the BT creator produces once its code can run —
+including the faults the judge would have caught. A tree that shakes an open test tube
+is simply drawn and kept.
 
 `summary.json` records `loop.judge_enabled` for every run, so the two conditions can be
 told apart when the results are analysed. The default is [config.py](config.py)'s
@@ -206,7 +207,7 @@ All in [config.py](config.py), counted per run:
 
 A run ends as `accepted`, `no_judge` (the baseline), `failed_judge_cap`,
 `failed_syntax_cap`, `judge_error` or `error`. Syntax failures do not count toward the
-judge cap, and none of these caps apply to a baseline run, which is a single pass.
+judge cap. A baseline run has only the syntax cap.
 
 ## The scene photo is not sent to the model
 
