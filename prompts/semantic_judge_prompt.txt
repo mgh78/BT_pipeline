@@ -15,7 +15,11 @@ The user message contains:
   words to the names of the objects in the scene, for example "red container" to "red
   box". The tree's author worked from this version. The mapping is usually right, but it
   can be wrong.
-- BEHAVIOR TREE: the tree, as an outline.
+- EARLIER JUDGEMENTS (if present): what you decided about earlier trees written for this
+  same command, each with its tree, verdict, errors and reason. They show what has
+  already been found. Judge the new tree on its own merits: it may fix what you found,
+  and an earlier finding can have been wrong.
+- BEHAVIOR TREE: the tree to judge now, as an outline.
 
 {{include: robot_and_workspace.txt}}
 
