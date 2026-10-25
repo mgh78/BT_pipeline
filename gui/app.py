@@ -213,7 +213,7 @@ class App(customtkinter.CTk):
                                font=('Arial', 10)).grid(row=0, column=0, padx=(0, 4))
         self.model_menu = customtkinter.CTkOptionMenu(
             models, values=config.AVAILABLE_MODELS, width=118, height=28,
-            font=('Arial', 11))
+            font=('Arial', 11), command=self.models_changed)
         self.model_menu.set(config.BT_GENERATION_MODEL)
         self.model_menu.grid(row=0, column=1)
 
@@ -221,9 +221,30 @@ class App(customtkinter.CTk):
                                font=('Arial', 10)).grid(row=0, column=2, padx=(10, 4))
         self.judge_menu = customtkinter.CTkOptionMenu(
             models, values=config.AVAILABLE_MODELS, width=118, height=28,
-            font=('Arial', 11))
+            font=('Arial', 11), command=self.models_changed)
         self.judge_menu.set(config.JUDGE_MODEL)
         self.judge_menu.grid(row=0, column=3)
+
+        # The reasoning effort of each model. It only applies to a model that is called
+        # through the Responses API, so the menu is greyed out for any other.
+        customtkinter.CTkLabel(models, text='effort', text_color='gray60',
+                               font=('Arial', 10)).grid(row=1, column=0, padx=(0, 4),
+                                                        pady=(6, 0))
+        self.effort_menu = customtkinter.CTkOptionMenu(
+            models, values=config.REASONING_EFFORTS, width=118, height=28,
+            font=('Arial', 11))
+        self.effort_menu.set(config.BT_GENERATION_REASONING_EFFORT)
+        self.effort_menu.grid(row=1, column=1, pady=(6, 0))
+
+        customtkinter.CTkLabel(models, text='effort', text_color='gray60',
+                               font=('Arial', 10)).grid(row=1, column=2, padx=(10, 4),
+                                                        pady=(6, 0))
+        self.judge_effort_menu = customtkinter.CTkOptionMenu(
+            models, values=config.REASONING_EFFORTS, width=118, height=28,
+            font=('Arial', 11))
+        self.judge_effort_menu.set(config.JUDGE_REASONING_EFFORT)
+        self.judge_effort_menu.grid(row=1, column=3, pady=(6, 0))
+        self.models_changed()
 
         self.run_button = customtkinter.CTkButton(
             box, text='Run pipeline', width=140, height=34, font=('Arial', 13, 'bold'),
@@ -291,9 +312,19 @@ class App(customtkinter.CTk):
     def judging(self):
         return self.mode_selector.get() == JUDGE_MODE
 
+    def models_changed(self, _model=None):
+        """Enable an effort menu only for a model that takes a reasoning effort."""
+        takes_effort = config.RESPONSES_API_MODELS
+        self.effort_menu.configure(
+            state='normal' if self.model_menu.get() in takes_effort else 'disabled')
+        self.judge_effort_menu.configure(
+            state='normal' if self.judging and self.judge_menu.get() in takes_effort
+            else 'disabled')
+
     def mode_changed(self, mode):
         """Grey out the judge model in baseline, and say what the run will do."""
         self.judge_menu.configure(state='normal' if self.judging else 'disabled')
+        self.models_changed()
         if mode == JUDGE_MODE:
             self.status('Judge: a rejected tree is sent back for repair, up to three.')
         else:
@@ -335,6 +366,8 @@ class App(customtkinter.CTk):
             'command': command,
             'generation_model': self.model_menu.get(),
             'judge_model': self.judge_menu.get(),
+            'generation_reasoning_effort': self.effort_menu.get(),
+            'judge_reasoning_effort': self.judge_effort_menu.get(),
             'enrichment_on': 'enrichment' in selected,
             'judge_enabled': self.judging,
         }

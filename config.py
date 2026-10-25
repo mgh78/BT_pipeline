@@ -80,6 +80,7 @@ AVAILABLE_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-5',
 # ('low', 'medium' or 'high'). Every other model keeps using chat completions and ignores
 # the efforts below, so changing them cannot affect a run on another model.
 RESPONSES_API_MODELS = {'gpt-6-luna'}
+REASONING_EFFORTS = ['low', 'medium', 'high']   # what the GUI offers
 ENRICHMENT_REASONING_EFFORT = 'medium'
 BT_GENERATION_REASONING_EFFORT = 'medium'
 JUDGE_REASONING_EFFORT = 'medium'
