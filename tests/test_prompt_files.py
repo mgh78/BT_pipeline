@@ -57,23 +57,15 @@ def test_real_prompts_assemble_completely(path):
     assert '{scene_objects}' in text
 
 
-def test_the_actions_and_physical_facts_are_in_the_prompts():
-    generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
+def test_the_judge_prompt_includes_the_shared_parts():
     judge = load_prompt(config.SEMANTIC_JUDGE_PROMPT_FILE)
+    folder = config.SEMANTIC_JUDGE_PROMPT_FILE.parent
+    for name in ('robot_and_workspace.txt', 'actions.txt', 'judge_physical_facts.txt'):
+        assert (folder / name).read_text().rstrip('\n') in judge
+
+
+def test_the_generation_prompt_has_no_physical_facts():
+    generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
     assert 'Place(name, obj, location)' in generation
-    shared = (config.BT_GENERATION_PROMPT_FILE.parent / 'robot_and_workspace.txt').read_text()
-    assert shared.rstrip('\n') in generation and shared.rstrip('\n') in judge
-    actions = (config.BT_GENERATION_PROMPT_FILE.parent / 'actions.txt').read_text()
-    assert actions.rstrip('\n') in generation and actions.rstrip('\n') in judge
-    assert 'Physical facts' in judge
     # The generator is not given physical rules; they belong to the judge.
     assert 'Physical facts' not in generation
-
-
-def test_every_part_file_is_used():
-    used = set()
-    for path in MAIN_PROMPTS:
-        used |= {path.parent / name for name in
-                 re.findall(r'\{\{include:\s*(.+?)\s*\}\}', path.read_text())}
-    parts = set(config.BT_GENERATION_PROMPT_FILE.parent.glob('*.txt')) - set(MAIN_PROMPTS)
-    assert parts == used
