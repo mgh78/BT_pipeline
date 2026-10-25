@@ -615,7 +615,7 @@ class SyntaxTestStage(Stage):
                                 f'{error} — install it with: pip install py_trees',
                                 group='Build')]
 
-        namespace = _sandbox(py_trees)
+        namespace = _sandbox(py_trees, code)
         checks = []
         try:
             exec(compile(code, '<generated>', 'exec'), namespace)  # noqa: S102
@@ -763,11 +763,13 @@ def spill_label(analysis, scene):
 
 # --- The sandbox -------------------------------------------------------------
 
-def _sandbox(py_trees):
+def _sandbox(py_trees, source=''):
     """A namespace where the four actions are stand-ins that build but never act.
 
-    The composites are the real py_trees ones, so the result is a real py_trees tree
-    that can be rendered and later ticked - only the leaves are inert.
+    The composites, decorators and behaviours are the real py_trees ones, so the result
+    is a real py_trees tree that can be rendered and later ticked - only the action
+    leaves are inert. Decorators and behaviours also remember the arguments they were
+    built with, so the tree can be described afterwards as the actions already are.
     """
     import logging as logging_module
 
@@ -787,8 +789,96 @@ def _sandbox(py_trees):
     for action in ACTION_SIGNATURES:
         actions[action] = type(action, (StubAction,), {'action': action})
 
-    return {'py_trees': py_trees, 'logging': logging_module, '__builtins__': __builtins__,
-            **actions}
+    return {'py_trees': _RecordingPyTrees(py_trees, _LambdaSources(source)),
+            'logging': logging_module, '__builtins__': __builtins__, **actions}
+
+
+class _LambdaSources:
+    """Finds the source text of a lambda that the generated code passed as an argument."""
+
+    def __init__(self, source):
+        self.by_line = {}
+        try:
+            for node in ast.walk(ast.parse(source)):
+                if isinstance(node, ast.Lambda):
+                    self.by_line.setdefault(node.lineno, []).append(node)
+        except SyntaxError:
+            pass
+
+    def of(self, function):
+        code = function.__code__
+        candidates = self.by_line.get(code.co_firstlineno, [])
+        names = list(code.co_varnames[:code.co_argcount])
+        for node in candidates:
+            if [a.arg for a in node.args.args] == names:
+                return ast.unparse(node)
+        return 'lambda'
+
+
+def _describe(value, lambdas):
+    """An argument as plain data that can be shown and saved."""
+    import enum
+
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, (list, tuple, set)):
+        return [_describe(item, lambdas) for item in value]
+    if isinstance(value, enum.Enum):
+        return f'{type(value).__name__}.{value.name}'
+    if hasattr(value, 'variable') and hasattr(value, 'operator'):   # ComparisonExpression
+        compared = value.value_generator() if hasattr(value, 'value_generator') else None
+        return (f'ComparisonExpression(variable={value.variable!r}, value={compared!r}, '
+                f'operator={_describe(value.operator, lambdas)})')
+    if callable(value) and getattr(value, '__name__', '') == '<lambda>':
+        return lambdas.of(value)
+    if callable(value):
+        return getattr(value, '__name__', repr(value))
+    return repr(value)
+
+
+class _RecordingModule:
+    """A py_trees module whose behaviours remember the keyword arguments they got."""
+
+    def __init__(self, module, lambdas):
+        self._module, self._lambdas, self._classes = module, lambdas, {}
+
+    def __getattr__(self, name):
+        attribute = getattr(self._module, name)
+        import py_trees
+        if not (isinstance(attribute, type)
+                and issubclass(attribute, py_trees.behaviour.Behaviour)):
+            return attribute
+        if name not in self._classes:
+            lambdas = self._lambdas
+
+            def __init__(self, *args, **kwargs):
+                attribute.__init__(self, *args, **kwargs)
+                self.arguments = {}
+                for key, value in kwargs.items():
+                    if key in ('name', 'child'):
+                        continue
+                    try:
+                        self.arguments[key] = _describe(value, lambdas)
+                    except Exception:  # noqa: BLE001 - describing must never stop the build
+                        self.arguments[key] = repr(value)
+
+            self._classes[name] = type(name, (attribute,), {
+                '__init__': __init__, '__module__': attribute.__module__,
+                '__doc__': attribute.__doc__})
+        return self._classes[name]
+
+
+class _RecordingPyTrees:
+    """``py_trees`` as the generated code sees it: the real module, with recording
+    decorators and behaviours."""
+
+    def __init__(self, py_trees, lambdas):
+        self._py_trees = py_trees
+        self.decorators = _RecordingModule(py_trees.decorators, lambdas)
+        self.behaviours = _RecordingModule(py_trees.behaviours, lambdas)
+
+    def __getattr__(self, name):
+        return getattr(self._py_trees, name)
 
 
 def _error_behind_try(code, py_trees):
@@ -801,7 +891,7 @@ def _error_behind_try(code, py_trees):
             return None
         function.body = function.body[0].body
         ast.fix_missing_locations(tree)
-        namespace = _sandbox(py_trees)
+        namespace = _sandbox(py_trees, code)
         exec(compile(tree, '<generated-no-try>', 'exec'), namespace)  # noqa: S102
         namespace[FUNCTION_NAME]()
     except Exception as error:  # noqa: BLE001 - this is exactly what we want to read
@@ -809,9 +899,16 @@ def _error_behind_try(code, py_trees):
     return None
 
 
+def _is_decorator(node):
+    import py_trees
+    return isinstance(node, py_trees.decorators.Decorator)
+
+
 def _as_text(root, depth=0):
     """A plain-text outline of the built tree, for the log and for bt_outline.txt."""
     marker = {'Sequence': '→', 'Selector': '?'}.get(type(root).__name__, '•')
+    if marker == '•' and _is_decorator(root):
+        marker = '◇'
     line = f'{"    " * depth}{marker} {root.name}'
     arguments = getattr(root, 'arguments', None)
     if arguments:

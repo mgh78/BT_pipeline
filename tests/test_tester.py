@@ -145,3 +145,41 @@ def test_the_four_actions_still_work_as_before(scene):
     checks, _ = run_checks(code(
         f'close_1 = {CLOSE}', f'shake_1 = {SHAKE}'), scene)
     assert failures(checks) == []
+
+
+def test_decorators_and_behaviours_remember_their_arguments(scene):
+    checks, tree = run_checks(code(
+        'set_1 = py_trees.behaviours.SetBlackboardVariable(name="SetCapOn", '
+        'variable_name="cap_on", variable_value=True, overwrite=True)',
+        'check_1 = py_trees.common.ComparisonExpression(variable="cap_on", value=True, '
+        'operator=lambda a, b: a == b)',
+        'cond_1 = py_trees.behaviours.CheckBlackboardVariableValue(name="CapIsOn", '
+        'check=check_1)',
+        f'shake_1 = {SHAKE}',
+        'retry_1 = py_trees.decorators.Retry(name="RetryShake", child=shake_1, '
+        'num_failures=3)',
+        'status_1 = py_trees.decorators.Condition(name="WaitShake", child=retry_1, '
+        'status=py_trees.common.Status.SUCCESS)',
+        root_children='set_1, cond_1, status_1'), scene)
+    assert failures(checks) == []
+    set_1, cond_1, status_1 = tree.children
+    assert set_1.arguments == {'variable_name': 'cap_on', 'variable_value': True,
+                               'overwrite': True}
+    assert cond_1.arguments == {
+        'check': "ComparisonExpression(variable='cap_on', value=True, "
+                 "operator=lambda a, b: a == b)"}
+    assert status_1.arguments == {'status': 'Status.SUCCESS'}
+    assert status_1.children[0].arguments == {'num_failures': 3}
+    assert type(status_1).__name__ == 'Condition'      # the class keeps its own name
+
+
+def test_the_text_outline_marks_decorators(scene):
+    from modules.tester import _as_text
+    _, tree = run_checks(code(
+        f'shake_1 = {SHAKE}',
+        'retry_1 = py_trees.decorators.Retry(name="RetryShake", child=shake_1, '
+        'num_failures=3)',
+        root_children='retry_1'), scene)
+    outline = _as_text(tree)
+    assert '◇ RetryShake  (num_failures=3)' in outline
+    assert outline.index('RetryShake') < outline.index('ShakeTube')
