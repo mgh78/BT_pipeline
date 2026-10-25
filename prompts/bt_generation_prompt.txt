@@ -7,11 +7,7 @@ user asked for, in the order the user gave them, and do not add, remove or reord
 actions to make the plan safer or more complete. A separate reviewer checks every tree
 before it runs and sends it back to you with its findings if something is wrong.
 
-Robot and workspace
-The robot is an arm with a gripper, working at a table. Each action is high-level and
-handles approaching, grasping, moving and releasing by itself.
-Positions are in metres. A higher y is further to the right, a lower y further to the
-left. A higher x is further from the robot base. z is the height above the table.
+{{include: robot_and_workspace.txt}}
 
 Scene
 Each line gives an object's id, which must be used exactly as written, followed by its
