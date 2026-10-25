@@ -57,11 +57,14 @@ def test_real_prompts_assemble_completely(path):
     assert '{scene_objects}' in text
 
 
-def test_the_judge_prompt_includes_the_shared_parts():
-    judge = load_prompt(config.SEMANTIC_JUDGE_PROMPT_FILE)
+def test_both_prompts_include_the_shared_parts():
     folder = config.SEMANTIC_JUDGE_PROMPT_FILE.parent
-    for name in ('robot_and_workspace.txt', 'actions.txt', 'judge_physical_facts.txt'):
-        assert (folder / name).read_text().rstrip('\n') in judge
+    generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
+    judge = load_prompt(config.SEMANTIC_JUDGE_PROMPT_FILE)
+    for name in ('robot_and_workspace.txt', 'actions.txt'):
+        text = (folder / name).read_text().rstrip('\n')
+        assert text in generation and text in judge
+    assert (folder / 'judge_physical_facts.txt').read_text().rstrip('\n') in judge
 
 
 def test_the_generation_prompt_has_no_physical_facts():

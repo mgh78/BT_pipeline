@@ -359,27 +359,29 @@ Without it nothing is lost — the PNG and the canvas do not need graphviz.
 
 ## The prompts
 
-The two prompts are in [prompts](prompts):
+The two prompts are in [prompts](prompts). The *Robot and workspace* and *Actions*
+sections, which both models read, and the judge's *Physical facts* live in their own
+files, and the main prompts only point at them:
 
 ```
 prompts/
-├── bt_generation_prompt.txt     the generator's prompt, written out in full
+├── bt_generation_prompt.txt     {{include: robot_and_workspace.txt}}
+│                                {{include: actions.txt}}
 ├── semantic_judge_prompt.txt    {{include: robot_and_workspace.txt}}
 │                                {{include: actions.txt}}
 │                                {{include: judge_physical_facts.txt}}
-├── robot_and_workspace.txt      the robot and the axes
-├── actions.txt                  the four actions
+├── robot_and_workspace.txt      the robot and the axes, shared by both prompts
+├── actions.txt                  the four actions, shared by both prompts
 └── judge_physical_facts.txt     the facts a tree must respect, for the judge only
 ```
 
-The generation prompt lists the four actions, the decorators and the condition and
-blackboard behaviours itself, with the rules for building the tree, so it no longer
-includes the shared files. The judge prompt still assembles its *Robot and workspace*,
-*Actions* and *Physical facts* sections from them. A line `{{include: file.txt}}` is
-replaced by that file's text when the prompt is loaded
-([modules/prompt_files.py](modules/prompt_files.py)); the path is relative to the file
-that contains the line. The generator has no physical facts on purpose: it only
-translates, and physical rules belong to the judge.
+A line `{{include: file.txt}}` is replaced by that file's text when the prompt is loaded
+([modules/prompt_files.py](modules/prompt_files.py)), so the model receives one continuous
+prompt. The path is relative to the file that contains the line. The robot and the
+actions are described once, so the generator and the judge are told the same thing;
+changing either file changes both prompts. The generator has no physical-facts file on
+purpose: it only translates, and physical rules belong to the judge. The generation
+prompt adds its own sections on decorators, conditions and building the tree.
 
 The judge reads decorators and conditions from its tree outline: a decorator is shown
 with its arguments and the node it wraps indented under it, and the judge prompt explains
