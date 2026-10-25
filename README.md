@@ -126,10 +126,17 @@ The judge answers with JSON and nothing else, re-validated by `parse_judgement()
 when the model returns structured output:
 
 ```json
-{"verdict": "reject",
+{"analysis": "The tree has every requested action, but Shake runs while the vial is open.",
+ "verdict": "reject",
  "errors": ["missing_precondition"],
  "reason": "ShakeVialTwoTimes shakes transparent_vial while it is open and holds liquid."}
 ```
+
+`analysis` is the first field on purpose. With structured output the model writes the
+fields in the order of the schema, so it works through its checks before it commits to a
+`verdict`. The analysis is saved in each attempt's `judge_form.json` and shown at the top
+of the window's Judge tab, but it is **not** sent to the BT creator: the feedback stays
+the errors and the reason.
 
 The six error codes, each shown to the generator as the form's own sentence:
 
@@ -142,7 +149,8 @@ The six error codes, each shown to the generator as the form's own sentence:
 | `missing_precondition` | A necessary precondition or check is missing |
 | `not_feasible` | The task is not feasible for the robot |
 
-An accept carrying errors, or a reject with no error or no reason, is refused and the
+A form without exactly the four keys, with an empty analysis, an accept carrying errors,
+or a reject with no error or no reason, is refused and the
 judge is asked again. **A judge that fails is never treated as an accept.**
 
 ## What the generator is told when a tree comes back

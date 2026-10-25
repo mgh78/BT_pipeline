@@ -35,15 +35,18 @@ ERROR_CODES = {
     'not_feasible': 'The task is not feasible for the robot',
 }
 
-# Passed to the API as a structured output schema when the model supports it.
+# Passed to the API as a structured output schema when the model supports it. The model
+# writes the fields in the order they appear here, so ``analysis`` comes first: the judge
+# works through its checks before it commits to a verdict.
 JUDGE_SCHEMA = {
     'type': 'object',
     'properties': {
+        'analysis': {'type': 'string'},
         'verdict': {'type': 'string', 'enum': ['accept', 'reject']},
         'errors': {'type': 'array', 'items': {'type': 'string', 'enum': list(ERROR_CODES)}},
         'reason': {'type': 'string'},
     },
-    'required': ['verdict', 'errors', 'reason'],
+    'required': ['analysis', 'verdict', 'errors', 'reason'],
     'additionalProperties': False,
 }
 
@@ -70,6 +73,8 @@ def parse_judgement(text):
 
     Applied to every reply, including a structured one: a schema can enforce the shape
     but not that an accepted tree lists no errors, or that a rejection gives a reason.
+    The analysis is kept with the form but is never part of the feedback the tree's
+    author receives: that stays the errors and the reason (``reviewer_problems``).
     """
     cleaned = text.strip()
     fenced = _FENCE.match(cleaned)
@@ -79,10 +84,14 @@ def parse_judgement(text):
         form = json.loads(cleaned)
     except json.JSONDecodeError as error:
         raise ValueError(f'the reply is not valid JSON ({error})') from error
-    if not isinstance(form, dict) or set(form) != {'verdict', 'errors', 'reason'}:
-        raise ValueError('the form must have exactly the keys verdict, errors and reason')
+    if not isinstance(form, dict) or set(form) != {'analysis', 'verdict', 'errors', 'reason'}:
+        raise ValueError('the form must have exactly the keys analysis, verdict, errors '
+                         'and reason')
 
-    verdict, errors, reason = form['verdict'], form['errors'], form['reason']
+    analysis, verdict = form['analysis'], form['verdict']
+    errors, reason = form['errors'], form['reason']
+    if not isinstance(analysis, str) or not analysis.strip():
+        raise ValueError('analysis must be a non-empty string')
     if verdict not in ('accept', 'reject'):
         raise ValueError(f'verdict must be "accept" or "reject", not {verdict!r}')
     if not isinstance(errors, list) or any(e not in ERROR_CODES for e in errors):
@@ -94,8 +103,8 @@ def parse_judgement(text):
     if verdict == 'reject' and (not errors or not reason.strip()):
         raise ValueError('a rejection needs at least one error code and a reason')
 
-    return {'verdict': verdict, 'errors': list(dict.fromkeys(errors)),
-            'reason': reason.strip()}
+    return {'analysis': analysis.strip(), 'verdict': verdict,
+            'errors': list(dict.fromkeys(errors)), 'reason': reason.strip()}
 
 
 def form_sentences(form):

@@ -8,6 +8,7 @@ generator.
     ../contextual-asr/venv/bin/python -m pytest tests -q
 """
 
+import json
 import os
 import sys
 
@@ -18,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
 from core.pipeline import Pipeline  # noqa: E402
 from core.run_context import RunContext  # noqa: E402
-from modules import llm  # noqa: E402
+from modules import llm, loop  # noqa: E402
 from modules.command import CommandStage  # noqa: E402
 from modules.loop_stage import GenerationLoopStage  # noqa: E402
 from modules.scene import SceneStage  # noqa: E402
@@ -57,8 +58,10 @@ GOOD_TREE = tree(CLOSE, SHAKE)
 TREE_WITHOUT_CLOSE = tree(SHAKE)
 TREE_WITH_WRONG_ID = tree(SHAKE_UNKNOWN)
 
-ACCEPT = '{"verdict": "accept", "errors": [], "reason": ""}'
-REJECT = ('{"verdict": "reject", "errors": ["missing_precondition"], '
+ANALYSIS = 'SECRET-ANALYSIS: every requested action is there; the tube is shaken open.'
+ACCEPT = '{"analysis": "All checks pass.", "verdict": "accept", "errors": [], "reason": ""}'
+REJECT = ('{"analysis": "' + ANALYSIS + '", "verdict": "reject", '
+          '"errors": ["missing_precondition"], '
           '"reason": "ShakeTube shakes an open tube that holds liquid."}')
 NOT_A_FORM = 'Looks fine to me.'
 
@@ -127,6 +130,9 @@ def test_rejected_tree_is_repaired(run):
     assert 'REVIEWER FINDINGS:' in second
     assert 'A necessary precondition or check is missing' in second
     assert 'PREVIOUS TREE:' in second
+    # The analysis is for the person reading the run; the generator gets errors + reason.
+    assert 'SECRET-ANALYSIS' not in second
+    assert 'ShakeTube shakes an open tube that holds liquid.' in second
 
 
 def test_three_rejections_end_the_run(run):
@@ -231,6 +237,32 @@ def test_every_attempt_keeps_its_own_folder(run):
         assert (folder / 'create_behavior_tree.py').exists()
         assert (folder / 'tester_report.json').exists()
         assert (folder / 'judge_form.json').exists()
+    saved = json.loads((context.directory / 'attempts/01/judge_form.json').read_text())
+    assert saved['analysis'] == ANALYSIS
     first = (context.directory / 'attempts/01/create_behavior_tree.py').read_text()
     second = (context.directory / 'attempts/02/create_behavior_tree.py').read_text()
     assert 'Close' not in first and 'Close' in second
+
+
+# --- the analysis field --------------------------------------------------------
+
+def test_analysis_comes_first_in_the_schema_and_is_required():
+    assert list(loop.JUDGE_SCHEMA['properties'])[0] == 'analysis'
+    assert loop.JUDGE_SCHEMA['required'][0] == 'analysis'
+
+
+def test_a_form_with_the_four_keys_keeps_its_analysis():
+    parsed = loop.parse_judgement(ACCEPT)
+    assert parsed['analysis'] == 'All checks pass.'
+    assert list(parsed) == ['analysis', 'verdict', 'errors', 'reason']
+
+
+@pytest.mark.parametrize('reply', [
+    '{"verdict": "accept", "errors": [], "reason": ""}',
+    '{"analysis": "x", "verdict": "accept", "errors": [], "reason": "", "extra": 1}',
+    '{"analysis": "", "verdict": "accept", "errors": [], "reason": ""}',
+    '{"analysis": "  ", "verdict": "accept", "errors": [], "reason": ""}',
+    '{"analysis": 3, "verdict": "accept", "errors": [], "reason": ""}'])
+def test_a_form_without_a_proper_analysis_is_refused(reply):
+    with pytest.raises(ValueError):
+        loop.parse_judgement(reply)

@@ -510,6 +510,8 @@ class App(customtkinter.CTk):
             for index, raw in enumerate(attempt.get('judge_replies', []), start=1):
                 lines += ['', f'Reply {index}:', raw]
         else:
+            if form.get('analysis'):  # runs made before the analysis existed have none
+                lines += ['Analysis:', form['analysis'], '']
             lines.append(f'Verdict: {form["verdict"]}')
             if form['errors']:
                 lines.append('')
