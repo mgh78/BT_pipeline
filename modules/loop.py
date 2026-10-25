@@ -125,15 +125,27 @@ def outline_for_judge(node, depth=0):
     return f'{indent}{kind}({arguments}) [{node.name}]'
 
 
-def judge_message(original_command, rewritten_command, outline):
+def judge_message(original_command, rewritten_command, outline, history=()):
     """The user message for one judge call.
 
     The judge is given the command the user typed, because the rewritten one was
     produced by another model and may itself be the error.
+
+    ``history`` holds the judge's own earlier judgements in this run, oldest first, each
+    ``{'n', 'outline', 'form'}``: the tree it judged and what it decided. They are shown
+    with the verdict, errors and reason, but not the analysis.
     """
     parts = [f'ORIGINAL COMMAND: {original_command}']
     if rewritten_command and rewritten_command.strip().lower() != original_command.strip().lower():
         parts.append(f'REWRITTEN COMMAND: {rewritten_command}')
+    if history:
+        parts.append('EARLIER JUDGEMENTS:')
+        for entry in history:
+            form = entry['form']
+            parts += [f'Attempt {entry["n"]}', 'Tree:', entry['outline'],
+                      f'Verdict: {form["verdict"]}',
+                      f'Errors: {"; ".join(form_sentences(form)) or "none"}',
+                      f'Reason: {form["reason"] or "none"}', '']
     parts += ['BEHAVIOR TREE:', outline]
     return '\n'.join(parts)
 
@@ -245,6 +257,7 @@ def run_generation_loop(command, original_command, rewritten_command,
         return record
 
     previous_code = problems = None
+    judged = []   # the judge's earlier judgements, shown to it with each new tree
     while True:
         message = generator_message(command, previous_code, problems)
         counts['generator_calls'] += 1
@@ -299,9 +312,11 @@ def run_generation_loop(command, original_command, rewritten_command,
             log.info('baseline run: the tree was not judged')
             return finish('no_judge')
 
-        # Semantic judge. A fresh call for every tree: it never sees earlier verdicts.
+        # Semantic judge. Every tree is a new call, but the judge is shown its own earlier
+        # judgements of this run, so it can see what it already found.
         outline = outline_for_judge(tree)
-        judge_input = judge_message(original_command, rewritten_command, outline)
+        judge_input = judge_message(original_command, rewritten_command, outline,
+                                    history=judged)
         attempt.update({'outline': outline, 'judge_message': judge_input,
                         'judge_replies': []})
         message_to_judge = judge_input
@@ -334,4 +349,5 @@ def run_generation_loop(command, original_command, rewritten_command,
                  ', '.join(form['errors']), form['reason'])
         if counts['judge_rejections'] >= config.JUDGE_REJECTION_LIMIT:
             return finish('failed_judge_cap')
+        judged.append({'n': attempt['n'], 'outline': outline, 'form': form})
         previous_code, problems = body, reviewer_problems(form)

@@ -5,7 +5,8 @@ accept or reject, which problems there are in its own words, and why - and on a
 rejection that form goes back to the generator as the feedback for the next tree.
 
 What it deliberately does not get: the Python code, the scene's target state, the
-verdicts it gave earlier in the run, and the photo unless the generator gets it too.
+and the photo unless the generator gets it too. It is shown its own earlier judgements
+of the run, each with the tree it judged, so it can see what it already found.
 Every tree is judged on its own, from the command the user actually typed.
 
 It never writes or repairs a tree, and a judge that fails is never treated as an accept.

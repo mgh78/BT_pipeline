@@ -258,6 +258,37 @@ def test_every_attempt_keeps_its_own_folder(run):
     assert 'Close' not in first and 'Close' in second
 
 
+# --- the judge sees its earlier judgements ------------------------------------
+
+def test_the_first_tree_is_judged_without_history(run):
+    _, scripted, _ = run([GOOD_TREE], [ACCEPT])
+    assert 'EARLIER JUDGEMENTS' not in scripted.messages('judge')[0]
+
+
+def test_the_judge_is_shown_its_earlier_judgement(run):
+    _, scripted, _ = run([TREE_WITHOUT_CLOSE, GOOD_TREE], [REJECT, ACCEPT])
+    first, second = scripted.messages('judge')
+    assert 'EARLIER JUDGEMENTS' not in first
+    assert second.index('EARLIER JUDGEMENTS:') < second.index('BEHAVIOR TREE:')
+    assert 'Attempt 1' in second
+    assert 'Verdict: reject' in second
+    assert 'Errors: tube is shaken while open' in second
+    assert 'Reason: ShakeTube shakes an open tube that holds liquid.' in second
+    assert 'SECRET-ANALYSIS' not in second          # the analysis is not replayed
+    assert 'Shake(' in second                       # the earlier tree is shown
+
+
+def test_the_history_grows_and_skips_trees_that_were_never_judged(run):
+    _, scripted, _ = run([TREE_WITH_WRONG_ID, TREE_WITHOUT_CLOSE, TREE_WITHOUT_CLOSE,
+                          GOOD_TREE], [REJECT, REJECT, ACCEPT])
+    messages = scripted.messages('judge')
+    # Attempt 1 failed the syntax check, so it was never judged and is not in the history.
+    assert 'Attempt 1' not in messages[1]
+    assert messages[1].count('Verdict: reject') == 1 and 'Attempt 2' in messages[1]
+    assert messages[2].count('Verdict: reject') == 2
+    assert 'Attempt 2' in messages[2] and 'Attempt 3' in messages[2]
+
+
 # --- the analysis field --------------------------------------------------------
 
 def test_analysis_comes_first_in_the_schema_and_is_required():
