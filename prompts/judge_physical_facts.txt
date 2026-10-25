@@ -5,3 +5,4 @@ Physical facts
   is closed.
 - Objects that hold or support other objects (boxes, crates, bowls, palettes, racks, tube
   holders) are fixed: they cannot be grasped or moved.
+- One cap closes one container.
