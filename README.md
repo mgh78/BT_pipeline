@@ -147,6 +147,16 @@ A form without exactly the four keys, with an empty analysis, an accept carrying
 or a reject with no error or no reason, is refused and the
 judge is asked again. **A judge that fails is never treated as an accept.**
 
+## What the judge sees on a later attempt
+
+Every tree is a new judge call, but from the second judged tree on the message also
+carries an `EARLIER JUDGEMENTS:` block before the `BEHAVIOR TREE:`: for each tree the
+judge already judged in this run, the attempt number, the tree as an outline, and the
+verdict, errors and reason it gave. The analysis is not repeated, and a tree that failed
+the syntax check is not listed, because the judge never saw it. The judge prompt tells
+it these are for reference and that the new tree is judged on its own merits. The block
+is saved with the rest of the message in `attempts/NN/judge/01/user_message.txt`.
+
 ## What the generator is told when a tree comes back
 
 **The system prompt never changes.** On every attempt the generator gets the identical
