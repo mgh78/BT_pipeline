@@ -36,6 +36,13 @@ One node per line, children indented under their parent.
 - "Sequence" runs its children from top to bottom and stops as soon as one fails.
 - "Selector" tries its children from top to bottom until one succeeds; the later
   children are fallbacks.
+- A decorator wraps the one node indented under it and changes how that node runs or what
+  it returns. "Retry" runs it again after it fails, "Repeat" runs it again after it
+  succeeds, "Timeout" fails it after some seconds, "Inverter" swaps success and failure,
+  and "FailureIsSuccess" makes it optional.
+- A condition or blackboard node, such as CheckBlackboardVariableValue or
+  SetBlackboardVariable, is shown with its arguments. A condition succeeds or fails, and
+  that decides which branch of a Selector or Sequence goes on to run.
 - An action line gives the action type and its arguments, then the node's name in
   brackets.
 Judge each action by its type and arguments. Node names are labels written by the tree's
