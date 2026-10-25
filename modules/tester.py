@@ -22,6 +22,7 @@ A check marked ``warning`` is reported but does not stop the run; only a failed
 
 import ast
 
+import config
 from core.pipeline import Check, Stage, StageError, StageStatus
 
 # The exact keyword arguments of each action node.
@@ -87,6 +88,21 @@ BEHAVIOUR_SIGNATURES = _signatures('behaviours', {
 HELPER_SIGNATURES = {
     'py_trees.common.ComparisonExpression': (('variable', 'value', 'operator'), ()),
 }
+
+def allowed_nodes():
+    """The decorators, behaviours and helpers the prompt allows: ``config.GRAMMAR_*``.
+
+    Read on every call, so a change in the config takes effect without a restart. A node
+    that py_trees has but the prompt does not name is reported as not allowed.
+    """
+    def pick(table, names):
+        return {name: signature for name, signature in table.items()
+                if name.rsplit('.', 1)[-1] in names}
+
+    return (pick(DECORATOR_SIGNATURES, config.GRAMMAR_DECORATORS),
+            pick(BEHAVIOUR_SIGNATURES, config.GRAMMAR_BEHAVIOURS),
+            pick(HELPER_SIGNATURES, config.GRAMMAR_HELPERS))
+
 
 # Arguments that must be integer literals, by node: "do it n times" with a string "3"
 # would build, then fail when the tree runs.
@@ -182,6 +198,7 @@ class Analysis:
 
     def __init__(self, tree):
         self.module = tree
+        self.allowed = allowed_nodes()  # (decorators, behaviours, helpers) of the grammar
         self.function = None
         self.top_level_extras = []     # anything beside the function definition
         self.nodes = []                # NodeCall, in source order
@@ -247,12 +264,21 @@ class Analysis:
             child = node.arguments.get('child')
             if isinstance(child, ast.Name):
                 self.add_children.append((variable, [child.id], call.lineno))
+            self._refuse_unless_allowed(name, self.allowed[0], call)
         elif name in BEHAVIOUR_SIGNATURES:
             self.nodes.append(NodeCall(variable, name, 'behaviour', call))
+            self._refuse_unless_allowed(name, self.allowed[1], call)
         elif name in HELPER_SIGNATURES:
             self.helpers.append(NodeCall(variable, name, 'helper', call))
+            self._refuse_unless_allowed(name, self.allowed[2], call)
         else:
             self.unknown_calls.append((name or ast.dump(call.func), call.lineno))
+
+    def _refuse_unless_allowed(self, name, allowed, call):
+        """A node py_trees has but the prompt does not name is still recorded, so the
+        other checks stay consistent, and reported once as not allowed."""
+        if name not in allowed:
+            self.unknown_calls.append((name, call.lineno))
 
     def _record_expression_call(self, call):
         name = _dotted(call.func)

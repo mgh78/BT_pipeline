@@ -10,6 +10,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import config  # noqa: E402
+from modules import tester  # noqa: E402
 from modules.scene import load_scene  # noqa: E402
 from modules.tester import SyntaxTestStage  # noqa: E402
 
@@ -37,6 +39,22 @@ def scene():
     return load_scene('scene8')
 
 
+def every_known_node():
+    """The names of all decorators, behaviours and helpers the tester can check."""
+    short = lambda table: tuple(name.rsplit('.', 1)[-1] for name in table)  # noqa: E731
+    return (short(tester.DECORATOR_SIGNATURES), short(tester.BEHAVIOUR_SIGNATURES),
+            short(tester.HELPER_SIGNATURES))
+
+
+@pytest.fixture
+def full_grammar(monkeypatch):
+    """Allow every py_trees node the tester knows, not only the prompt's grammar."""
+    decorators, behaviours, helpers = every_known_node()
+    monkeypatch.setattr(config, 'GRAMMAR_DECORATORS', decorators)
+    monkeypatch.setattr(config, 'GRAMMAR_BEHAVIOURS', behaviours)
+    monkeypatch.setattr(config, 'GRAMMAR_HELPERS', helpers)
+
+
 def run_checks(source, scene):
     checks, tree, _ = SyntaxTestStage().check(source, scene)
     return {check.id: check for check in checks}, tree
@@ -57,7 +75,7 @@ def test_a_tree_with_a_retry_decorator_passes(scene):
     assert checks['build.node_count'].passed
 
 
-def test_conditions_and_the_blackboard_pass(scene):
+def test_conditions_and_the_blackboard_pass(scene, full_grammar):
     checks, tree = run_checks(code(
         'set_1 = py_trees.behaviours.SetBlackboardVariable(name="SetCapOn", '
         'variable_name="cap_on", variable_value=True, overwrite=True)',
@@ -74,7 +92,7 @@ def test_conditions_and_the_blackboard_pass(scene):
     assert checks['build.node_count'].passed
 
 
-def test_a_decorator_inside_a_decorator_passes(scene):
+def test_a_decorator_inside_a_decorator_passes(scene, full_grammar):
     checks, _ = run_checks(code(
         f'shake_1 = {SHAKE}',
         'timeout_1 = py_trees.decorators.Timeout(name="TimeoutShake", child=shake_1, '
@@ -147,7 +165,7 @@ def test_the_four_actions_still_work_as_before(scene):
     assert failures(checks) == []
 
 
-def test_decorators_and_behaviours_remember_their_arguments(scene):
+def test_decorators_and_behaviours_remember_their_arguments(scene, full_grammar):
     checks, tree = run_checks(code(
         'set_1 = py_trees.behaviours.SetBlackboardVariable(name="SetCapOn", '
         'variable_name="cap_on", variable_value=True, overwrite=True)',
@@ -185,7 +203,7 @@ def test_the_text_outline_marks_decorators(scene):
     assert outline.index('RetryShake') < outline.index('ShakeTube')
 
 
-def test_the_judge_outline_shows_decorators_and_conditions(scene):
+def test_the_judge_outline_shows_decorators_and_conditions(scene, full_grammar):
     from modules.loop import outline_for_judge
     _, tree = run_checks(code(
         'set_1 = py_trees.behaviours.SetBlackboardVariable(name="SetShaken", '
@@ -203,3 +221,46 @@ def test_the_judge_outline_shows_decorators_and_conditions(scene):
         '        Retry(num_failures=3) [RetryShake]',
         f'            Shake(obj="{TUBE}", times=2) [ShakeTube]',
     ]
+
+
+# --- the grammar is the one in config, which follows the prompt -------------------
+
+def test_the_four_decorators_of_the_prompt_pass(scene):
+    for name, extra in (('Retry', 'num_failures=3'), ('Repeat', 'num_success=2'),
+                        ('Timeout', 'duration=5'), ('FailureIsSuccess', '')):
+        arguments = f'name="Wrap", child=shake_1{", " + extra if extra else ""}'
+        checks, tree = run_checks(code(
+            f'shake_1 = {SHAKE}',
+            f'wrap_1 = py_trees.decorators.{name}({arguments})',
+            root_children='wrap_1'), scene)
+        assert failures(checks) == [], name
+        assert type(tree.children[0]).__name__ == name
+
+
+def test_a_decorator_the_prompt_does_not_name_is_not_allowed(scene):
+    checks, _ = run_checks(code(
+        f'shake_1 = {SHAKE}',
+        'invert_1 = py_trees.decorators.Inverter(name="NotShake", child=shake_1)',
+        root_children='invert_1'), scene)
+    assert failures(checks) == ['structure.allowed_nodes']
+    assert 'py_trees.decorators.Inverter' in checks['structure.allowed_nodes'].message
+
+
+def test_the_prompt_has_no_conditions_so_they_are_not_allowed(scene):
+    checks, _ = run_checks(code(
+        f'shake_1 = {SHAKE}',
+        'set_1 = py_trees.behaviours.SetBlackboardVariable(name="SetFlag", '
+        'variable_name="flag", variable_value=True, overwrite=True)',
+        root_children='shake_1, set_1'), scene)
+    assert 'structure.allowed_nodes' in failures(checks)
+    assert 'SetBlackboardVariable' in checks['structure.allowed_nodes'].message
+
+
+def test_the_grammar_follows_the_config(scene, monkeypatch):
+    monkeypatch.setattr(config, 'GRAMMAR_DECORATORS',
+                        (*config.GRAMMAR_DECORATORS, 'Inverter'))
+    checks, _ = run_checks(code(
+        f'shake_1 = {SHAKE}',
+        'invert_1 = py_trees.decorators.Inverter(name="NotShake", child=shake_1)',
+        root_children='invert_1'), scene)
+    assert failures(checks) == []

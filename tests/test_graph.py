@@ -14,7 +14,7 @@ import config  # noqa: E402
 from modules import graph  # noqa: E402
 from modules.scene import load_scene  # noqa: E402
 from modules.tester import SyntaxTestStage  # noqa: E402
-from test_tester import SHAKE, code  # noqa: E402
+from test_tester import SHAKE, code, every_known_node  # noqa: E402
 
 
 @pytest.fixture(scope='module')
@@ -26,7 +26,13 @@ def built():
         'set_1 = py_trees.behaviours.SetBlackboardVariable(name="SetShaken", '
         'variable_name="shaken", variable_value=True, overwrite=True)',
         root_children='retry_1, set_1')
-    checks, tree, _ = SyntaxTestStage().check(source, load_scene('scene8'))
+    # The drawing handles every node the tester knows, whatever the prompt allows today.
+    decorators, behaviours, helpers = every_known_node()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(config, 'GRAMMAR_DECORATORS', decorators)
+        patch.setattr(config, 'GRAMMAR_BEHAVIOURS', behaviours)
+        patch.setattr(config, 'GRAMMAR_HELPERS', helpers)
+        checks, tree, _ = SyntaxTestStage().check(source, load_scene('scene8'))
     assert not any(check.blocking for check in checks)
     return tree
 
