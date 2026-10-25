@@ -11,8 +11,8 @@ The checks are grouped, and each one reports on its own so a failure points at a
 Syntax     - the code parses, and holds exactly one ``create_behavior_tree``.
 Structure  - the mandated try/except, the ``Root`` sequence, ``memory=True``,
              unique node names and variables, no orphaned nodes.
-Arguments  - each action gets exactly the arguments it takes, and ``times`` is an
-             integer literal.
+Arguments  - each node gets exactly the arguments it takes, and counts such as
+             ``times`` are integer literals.
 Scene      - every object id exists in the scene and is used in a role it can play.
 Build      - the function constructs and returns a py_trees tree.
 
@@ -36,6 +36,64 @@ ACTION_SIGNATURES = {
 COMPOSITES = {
     'py_trees.composites.Sequence': 'sequence',
     'py_trees.composites.Selector': 'selector',
+}
+
+
+def _signatures(module, table):
+    """``{'py_trees.<module>.<Name>': (required, optional)}`` for a table of nodes."""
+    return {f'py_trees.{module}.{name}': arguments for name, arguments in table.items()}
+
+
+_CHILD_ONLY = (('name', 'child'), ())
+
+# The decorators the prompt allows (py_trees.decorators): required and optional keywords.
+DECORATOR_SIGNATURES = _signatures('decorators', {
+    'Retry': (('name', 'child', 'num_failures'), ()),
+    'Repeat': (('name', 'child', 'num_success'), ()),
+    'Timeout': (('name', 'child'), ('duration',)),
+    'Inverter': _CHILD_ONLY,
+    'FailureIsSuccess': _CHILD_ONLY,
+    'FailureIsRunning': _CHILD_ONLY,
+    'SuccessIsFailure': _CHILD_ONLY,
+    'SuccessIsRunning': _CHILD_ONLY,
+    'RunningIsFailure': _CHILD_ONLY,
+    'RunningIsSuccess': _CHILD_ONLY,
+    'OneShot': (('name', 'child', 'policy'), ()),
+    'Condition': (('name', 'child', 'status'), ()),
+    'EternalGuard': (('name', 'child', 'condition'), ('blackboard_keys',)),
+    'StatusToBlackboard': (('name', 'child', 'variable_name'), ()),
+    'Count': _CHILD_ONLY,
+    'PassThrough': _CHILD_ONLY,
+    'ForEach': (('name', 'child', 'source_key', 'target_key'), ()),
+})
+
+# The condition and blackboard behaviours the prompt allows (py_trees.behaviours).
+BEHAVIOUR_SIGNATURES = _signatures('behaviours', {
+    'SetBlackboardVariable': (('name', 'variable_name', 'variable_value', 'overwrite'), ()),
+    'UnsetBlackboardVariable': (('name', 'key'), ()),
+    'CheckBlackboardVariableExists': (('name', 'variable_name'), ()),
+    'CheckBlackboardVariableValue': (('name', 'check'), ()),
+    'CheckBlackboardVariableValues': (('name', 'checks', 'operator'), ('namespace',)),
+    'CompareBlackboardVariables': (('name', 'var1_key', 'var2_key', 'operator'), ()),
+    'WaitForBlackboardVariable': (('name', 'variable_name'), ()),
+    'WaitForBlackboardVariableValue': (('name', 'check'), ()),
+    'BlackboardToStatus': (('name', 'variable_name'), ()),
+    'Success': (('name',), ()),
+    'Failure': (('name',), ()),
+    'Running': (('name',), ()),
+})
+
+# Objects the prompt builds a check from. They are not tree nodes.
+HELPER_SIGNATURES = {
+    'py_trees.common.ComparisonExpression': (('variable', 'value', 'operator'), ()),
+}
+
+# Arguments that must be integer literals, by node: "do it n times" with a string "3"
+# would build, then fail when the tree runs.
+COUNT_ARGUMENTS = {
+    'Shake': 'times',
+    'py_trees.decorators.Retry': 'num_failures',
+    'py_trees.decorators.Repeat': 'num_success',
 }
 
 # Which action arguments must name a scene object, and the role that object must play.
@@ -83,7 +141,8 @@ class NodeCall:
     def __init__(self, variable, constructor, kind, call):
         self.variable = variable
         self.constructor = constructor
-        self.kind = kind                      # 'action', 'sequence' or 'selector'
+        # 'action', 'sequence', 'selector', 'decorator' or 'behaviour'
+        self.kind = kind
         self.lineno = call.lineno
         self.positional = list(call.args)
         self.arguments = {kw.arg: kw.value for kw in call.keywords if kw.arg}
@@ -98,6 +157,22 @@ class NodeCall:
     def action(self):
         return self.constructor if self.kind == 'action' else None
 
+    @property
+    def short_name(self):
+        """``Retry`` for ``py_trees.decorators.Retry``."""
+        return self.constructor.rsplit('.', 1)[-1]
+
+    @property
+    def signature(self):
+        """``(required, optional)`` keywords of this node, from the tables above."""
+        if self.kind == 'action':
+            return ACTION_SIGNATURES[self.constructor], ()
+        if self.kind == 'decorator':
+            return DECORATOR_SIGNATURES[self.constructor]
+        if self.kind == 'behaviour':
+            return BEHAVIOUR_SIGNATURES[self.constructor]
+        return (), ()
+
     def __repr__(self):
         return f'<NodeCall {self.variable}={self.constructor} line {self.lineno}>'
 
@@ -110,6 +185,7 @@ class Analysis:
         self.function = None
         self.top_level_extras = []     # anything beside the function definition
         self.nodes = []                # NodeCall, in source order
+        self.helpers = []              # NodeCall for objects that are not nodes
         self.unknown_calls = []        # (dotted name, lineno) not allowed by the prompt
         self.add_children = []         # (target variable, [child variables], lineno)
         self.assignment_counts = {}    # variable -> how often it is assigned
@@ -164,6 +240,17 @@ class Analysis:
             self.nodes.append(NodeCall(variable, name, 'action', call))
         elif name in COMPOSITES:
             self.nodes.append(NodeCall(variable, name, COMPOSITES[name], call))
+        elif name in DECORATOR_SIGNATURES:
+            node = NodeCall(variable, name, 'decorator', call)
+            self.nodes.append(node)
+            # A decorator's child is attached by the constructor, not by add_children.
+            child = node.arguments.get('child')
+            if isinstance(child, ast.Name):
+                self.add_children.append((variable, [child.id], call.lineno))
+        elif name in BEHAVIOUR_SIGNATURES:
+            self.nodes.append(NodeCall(variable, name, 'behaviour', call))
+        elif name in HELPER_SIGNATURES:
+            self.helpers.append(NodeCall(variable, name, 'helper', call))
         else:
             self.unknown_calls.append((name or ast.dump(call.func), call.lineno))
 
@@ -343,14 +430,15 @@ class SyntaxTestStage(Stage):
         checks.append(Check(
             'structure.memory', 'Every Sequence and Selector has memory=True',
             not bad_memory,
-            f'all {sum(1 for n in analysis.nodes if n.kind != "action")} composites set it'
+            f'all {sum(1 for n in analysis.nodes if n.kind in ("sequence", "selector"))} '
+            f'composites set it'
             if not bad_memory
             else 'missing on: ' + ', '.join(f'{n.variable} (line {n.lineno})' for n in bad_memory),
             line=bad_memory[0].lineno if bad_memory else None, group='Structure'))
 
         # Only the allowed constructors.
         checks.append(Check(
-            'structure.allowed_nodes', 'Only the four actions and py_trees composites',
+            'structure.allowed_nodes', 'Only the nodes the prompt allows',
             not analysis.unknown_calls,
             f'{len(analysis.nodes)} nodes, all allowed' if not analysis.unknown_calls
             else 'not allowed: ' + ', '.join(f'{name} (line {line})'
@@ -421,44 +509,47 @@ class SyntaxTestStage(Stage):
     def _check_arguments(self, analysis):
         checks = []
         problems = []
-        for node in analysis.nodes:
-            if node.kind != 'action':
-                continue
-            expected = set(ACTION_SIGNATURES[node.constructor])
+        with_arguments = [n for n in (*analysis.nodes, *analysis.helpers)
+                          if n.kind in ('action', 'decorator', 'behaviour', 'helper')]
+        for node in with_arguments:
+            required, optional = (HELPER_SIGNATURES[node.constructor] if node.kind == 'helper'
+                                  else node.signature)
             given = set(node.arguments)
-            missing = expected - given
-            unexpected = given - expected
+            missing = set(required) - given
+            unexpected = given - set(required) - set(optional)
+            label = node.constructor if node.kind in ('action', 'helper') else node.short_name
             if node.positional:
-                problems.append(f'{node.constructor} on line {node.lineno} passes '
+                problems.append(f'{label} on line {node.lineno} passes '
                                 f'{len(node.positional)} positional argument(s); the prompt '
                                 f'uses keywords only')
             if missing:
-                problems.append(f'{node.constructor} on line {node.lineno} is missing '
+                problems.append(f'{label} on line {node.lineno} is missing '
                                 f'{", ".join(sorted(missing))}')
             if unexpected:
-                problems.append(f'{node.constructor} on line {node.lineno} does not take '
+                problems.append(f'{label} on line {node.lineno} does not take '
                                 f'{", ".join(sorted(unexpected))}')
 
         checks.append(Check(
-            'arguments.signatures', 'Every action gets exactly its own arguments',
+            'arguments.signatures', 'Every node gets exactly its own arguments',
             not problems,
-            f'{sum(1 for n in analysis.nodes if n.kind == "action")} action nodes are correct'
+            f'{len(with_arguments)} nodes and checks are correct'
             if not problems else '; '.join(problems), group='Arguments'))
 
-        # Shake(times=...) must be an integer literal.
-        bad_times = []
+        # Counts such as Shake(times=...) must be integer literals.
+        bad_counts = []
         for node in analysis.nodes:
-            if node.constructor != 'Shake':
+            argument = COUNT_ARGUMENTS.get(node.constructor)
+            if argument is None:
                 continue
-            value = node.values.get('times', _UNKNOWN)
+            value = node.values.get(argument, _UNKNOWN)
             if not isinstance(value, int) or isinstance(value, bool):
-                shown = 'missing' if 'times' not in node.arguments else (
-                    ast.unparse(node.arguments['times']))
-                bad_times.append(f'line {node.lineno}: times={shown}')
+                shown = 'missing' if argument not in node.arguments else (
+                    ast.unparse(node.arguments[argument]))
+                bad_counts.append(f'line {node.lineno}: {argument}={shown}')
         checks.append(Check(
-            'arguments.times', 'Shake gets an integer number of times', not bad_times,
-            'all Shake counts are integer literals' if not bad_times
-            else '; '.join(bad_times), group='Arguments'))
+            'arguments.counts', 'Counts are integers', not bad_counts,
+            'all counts are integer literals' if not bad_counts
+            else '; '.join(bad_counts), group='Arguments'))
 
         # Every node must have a name.
         unnamed = [n for n in analysis.nodes if not n.node_name]
@@ -623,7 +714,10 @@ class SyntaxTestStage(Stage):
         if analysis is not None:
             detail['nodes declared'] = len(analysis.nodes)
             detail['actions'] = sum(1 for n in analysis.nodes if n.kind == 'action')
-            detail['composites'] = sum(1 for n in analysis.nodes if n.kind != 'action')
+            detail['composites'] = sum(1 for n in analysis.nodes
+                                       if n.kind in ('sequence', 'selector'))
+            detail['decorators'] = sum(1 for n in analysis.nodes if n.kind == 'decorator')
+            detail['behaviours'] = sum(1 for n in analysis.nodes if n.kind == 'behaviour')
         if blocking:
             detail['first failure'] = f'{blocking[0].title}: {blocking[0].message}'
 
