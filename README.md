@@ -44,23 +44,29 @@ The API key is read from `OPENAI_API_KEY`, or from
 | Tree graph | [modules/graph.py](modules/graph.py) | Lays the tree out once and draws it on the canvas, to a PNG and to a `.dot` file. |
 
 The four actions come from the manipulator prompt in the contextual-asr project: `Place`,
-`Pour`, `Shake`, `Close`. The generator may also use the py_trees decorators (`Retry`,
-`Repeat`, `Timeout`, `Inverter`, …) and the condition and blackboard behaviours
-(`SetBlackboardVariable`, `CheckBlackboardVariableValue`, …), but only where the command
-asks for what they do.
+`Pour`, `Shake`, `Close`. The generator may also use four py_trees decorators (`Retry`,
+`Repeat`, `Timeout`, `FailureIsSuccess`), but only where the command asks for what they
+do.
 
 ## Where the behavior tree grammar comes from
 
 On the `BT_Grammar` branch the grammar the generation prompt gives the model — the
-composites, the decorators, the condition and blackboard behaviours, and the
-`ComparisonExpression` check — is based on the **py_trees** library:
+composites (`Sequence`, `Selector`) and the decorators `Retry`, `Repeat`, `Timeout` and
+`FailureIsSuccess` — is based on the **py_trees** library:
 <https://github.com/splintered-reality/py_trees>. The node names, their keyword
 arguments and what each one does follow py_trees 2.x (the signatures were checked against
-the installed 2.6.0). The same tables drive the syntax check
-(`DECORATOR_SIGNATURES` and `BEHAVIOUR_SIGNATURES` in [modules/tester.py](modules/tester.py)),
-so a tree that uses a node or an argument py_trees does not have is refused before it is
-built. Only the four actions (`Place`, `Pour`, `Shake`, `Close`) are not from py_trees:
-they are this project's own stand-ins.
+the installed 2.6.0). Only the four actions (`Place`, `Pour`, `Shake`, `Close`) are not
+from py_trees: they are this project's own stand-ins.
+
+The prompt is the grammar, and the syntax check enforces it. `GRAMMAR_DECORATORS`,
+`GRAMMAR_BEHAVIOURS` and `GRAMMAR_HELPERS` in [config.py](config.py) name the py_trees
+nodes the prompt allows; a decorator or behaviour that py_trees has but the prompt does
+not name, such as `Inverter` or `SetBlackboardVariable`, is refused as "not allowed"
+before the tree is built. [modules/tester.py](modules/tester.py) knows how to check every
+py_trees decorator, condition and blackboard behaviour (`DECORATOR_SIGNATURES`,
+`BEHAVIOUR_SIGNATURES`), so widening the grammar is two edits: add the node to the prompt
+and to the config. If you change one and not the other, the syntax check and the prompt
+disagree.
 
 ## Who decides what
 
@@ -279,7 +285,7 @@ described afterwards.
 | Group | Checks |
 |---|---|
 | Syntax | the code parses; there is exactly one `create_behavior_tree`; nothing else at top level |
-| Structure | the body is one `try/except` with the mandated `logging.error` line; the root is a `Sequence` named `Root`; every composite has `memory=True`; only the nodes the prompt allows are used (the four actions, `Sequence`, `Selector`, the listed decorators and behaviours); node names and variables are unique; no orphaned node, no node with two parents (a decorator's `child=` counts as its parent), no child that was never created |
+| Structure | the body is one `try/except` with the mandated `logging.error` line; the root is a `Sequence` named `Root`; every composite has `memory=True`; only the nodes the prompt allows are used (the four actions, `Sequence`, `Selector` and the py_trees nodes in `GRAMMAR_DECORATORS`, `GRAMMAR_BEHAVIOURS` and `GRAMMAR_HELPERS`); node names and variables are unique; no orphaned node, no node with two parents (a decorator's `child=` counts as its parent), no child that was never created |
 | Arguments | every action, decorator and behaviour gets exactly its own keyword arguments; counts (`Shake(times=…)`, `Retry(num_failures=…)`, `Repeat(num_success=…)`) are integer literals; every node has a literal name |
 | Scene | every object id exists in the scene, spelled exactly; locations are used as locations and graspable objects are grasped |
 | Build | the function loads, constructs, and returns a real `py_trees` node with the expected number of nodes |
@@ -356,7 +362,7 @@ declares them, in the canvas, in `bt_graph.png` and in the `.dot` file:
 | Selector | orange | `?` | tries its children in order until one succeeds |
 | Action | green | — | a robot action: Place, Pour, Shake or Close; the box lists its arguments |
 | Decorator | purple | — | wraps the node under it and changes how it runs or what it returns; the class name is under the title |
-| Condition / blackboard | yellow | — | checks or sets a blackboard value, or always succeeds or fails |
+| Condition / blackboard | yellow | — | checks or sets a blackboard value, or always succeeds or fails (only when the grammar allows such nodes) |
 
 The legend lists only the node types that the tree actually contains. The colours are
 `GRAPH_COLORS` in [config.py](config.py).
@@ -394,7 +400,7 @@ prompt. The path is relative to the file that contains the line. The robot and t
 actions are described once, so the generator and the judge are told the same thing;
 changing either file changes both prompts. The generator has no physical-facts file on
 purpose: it only translates, and physical rules belong to the judge. The generation
-prompt adds its own sections on decorators, conditions and building the tree.
+prompt adds its own sections on the decorators and on building the tree.
 
 The judge reads decorators and conditions from its tree outline: a decorator is shown
 with its arguments and the node it wraps indented under it, and the judge prompt explains
