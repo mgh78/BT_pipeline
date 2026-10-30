@@ -14,7 +14,7 @@ Your job is to translate the command faithfully, not to check it. Build the acti
 user asked for, in the order the user gave them. A separate reviewer checks every tree
 before it runs and sends it back to you with its findings if something is wrong.
 
-{{include: ../robot_and_workspace.txt}}
+{{include: robot_and_workspace.txt}}
 
 {{include: perception.txt}}
 
