@@ -68,6 +68,41 @@ py_trees decorator, condition and blackboard behaviour (`DECORATOR_SIGNATURES`,
 and to the config. If you change one and not the other, the syntax check and the prompt
 disagree.
 
+## Generic trees
+
+On the `Generalizable-behaviour-tree` branch the generator writes **generic** trees: the
+same tree does the task on any table. It is not shown the scene's objects and never
+names one. Instead the tree describes the objects it needs by what the robot perceives
+(type, colour, liquid colour, graspable, holds liquid, closed, marked; the list is
+[prompts/perception.txt](prompts/perception.txt)), finds them while it runs, and the
+rest of the tree refers to them through the py_trees blackboard:
+
+```python
+find_1 = FindOne(name="FindRack", key="rack", type="box", color="blue")
+find_2 = FindAll(name="FindFlasks", key="flasks", type="measuring cylinder")
+place_1 = Place(name="PlaceFlask", obj="@flask", location="@rack")
+for_1 = py_trees.decorators.ForEach(name="ForEachFlask", child=place_1,
+                                    source_key="flasks", target_key="flask")
+```
+
+- `FindOne(name, key, <properties>, position, nth)` stores one object under `key`.
+  `position` (`leftmost`, `rightmost`, `nearest`, `farthest`) and `nth` pick among
+  several, so "the second box from the left" is `position="leftmost", nth=2`.
+- `FindAll(name, key, <properties>, limit, position)` stores a list, which
+  `py_trees.decorators.ForEach` loops over.
+- `HasProperty(name, obj, property, value)` checks an object while the tree runs, for
+  "if …, otherwise …" commands, with `py_trees.behaviours.Success` as an empty
+  "otherwise".
+- Every object argument is `"@key"`; a key is a plain name.
+
+The property vocabulary is also in [config.py](config.py) (`PERCEPTION_TYPES`,
+`PERCEPTION_COLOR_PROPERTIES`, `PERCEPTION_BOOLEAN_PROPERTIES`, `FIND_POSITIONS`) for the
+syntax check; a test makes sure the two agree. The find and check nodes are inert
+stand-ins in the sandbox, like the actions: the real ones come with the executor. The
+judge has **not** been adapted yet: its prompt still expects object ids. Test the
+generator with the judge switched off and enrichment off (enrichment rewrites the command
+with the scene's object names).
+
 ## Who decides what
 
 Each part has exactly one job, and they are deliberately kept apart.
@@ -277,7 +312,7 @@ next to it.
 ## What the syntax check checks
 
 It is a *static* test. The only thing executed is the construction of the tree itself,
-with the four actions replaced by inert stand-ins — which is the only way to prove the
+with the four actions and the find and check nodes replaced by inert stand-ins — which is the only way to prove the
 function really returns a tree. The decorators, composites and behaviours are the real
 py_trees ones, and they remember the arguments they were built with so the tree can be
 described afterwards.
@@ -287,7 +322,7 @@ described afterwards.
 | Syntax | the code parses; there is exactly one `create_behavior_tree`; nothing else at top level |
 | Structure | the body is one `try/except` with the mandated `logging.error` line; the root is a `Sequence` named `Root`; every composite has `memory=True`; only the nodes the prompt allows are used (the four actions, `Sequence`, `Selector` and the py_trees nodes in `GRAMMAR_DECORATORS`, `GRAMMAR_BEHAVIOURS` and `GRAMMAR_HELPERS`); node names and variables are unique; no orphaned node, no node with two parents (a decorator's `child=` counts as its parent), no child that was never created |
 | Arguments | every action, decorator and behaviour gets exactly its own keyword arguments; counts (`Shake(times=…)`, `Retry(num_failures=…)`, `Repeat(num_success=…)`) are integer literals; every node has a literal name |
-| Scene | every object id exists in the scene, spelled exactly; locations are used as locations and graspable objects are grasped |
+| Objects | find nodes use only the properties and values in `PERCEPTION_*` (`type` from the closed list, colours lowercase, the rest `True`/`False`); `position` is one of `FIND_POSITIONS`; `nth` and `limit` are positive integers; every key is a plain name stored once; every object argument is an `"@key"` stored by a find node that runs earlier, or the `target_key` of a `ForEach` it sits inside; a `FindAll` list is only looped over and a `FindOne` object is never looped over |
 | Build | the function loads, constructs, and returns a real `py_trees` node with the expected number of nodes |
 
 A failed check marked *warning* is reported but does not stop the run. Only a failed
@@ -298,7 +333,8 @@ There are **no physical rules here**. "A container holding liquid is closed befo
 shaken" used to be a check and is now the judge's to make, so a `Shake` without a
 `Close` passes this stage and reaches the judge. The rule is still computed as
 `spill_label()` and written to `analysis_labels.json` per attempt, as an automatic
-label for evaluating the judge later — it is never shown to the generator or the judge,
+label for evaluating the judge later (not for a generic tree, which names no scene
+object) — it is never shown to the generator or the judge,
 and it never changes a status.
 
 ## What a run leaves behind
@@ -361,6 +397,7 @@ declares them, in the canvas, in `bt_graph.png` and in the `.dot` file:
 | Sequence | blue | `→` | runs its children in order and stops at the first failure |
 | Selector | orange | `?` | tries its children in order until one succeeds |
 | Action | green | — | a robot action: Place, Pour, Shake or Close; the box lists its arguments |
+| Find / check | teal | — | `FindOne`, `FindAll` or `HasProperty`: finds objects by their properties, or checks a property of one |
 | Decorator | purple | — | wraps the node under it and changes how it runs or what it returns; the class name is under the title |
 | Condition / blackboard | yellow | — | checks or sets a blackboard value, or always succeeds or fails (only when the grammar allows such nodes) |
 
@@ -385,20 +422,23 @@ files, and the main prompts only point at them:
 ```
 prompts/
 ├── bt_generation_prompt.txt     {{include: robot_and_workspace.txt}}
-│                                {{include: actions.txt}}
+│                                {{include: perception.txt}}
+│                                {{include: generic_actions.txt}}
 ├── semantic_judge_prompt.txt    {{include: robot_and_workspace.txt}}
 │                                {{include: actions.txt}}
 │                                {{include: judge_physical_facts.txt}}
 ├── robot_and_workspace.txt      the robot and the axes, shared by both prompts
-├── actions.txt                  the four actions, shared by both prompts
+├── actions.txt                  the four actions with object ids, for the judge
+├── generic_actions.txt          the four actions with @ references, for the generator
+├── perception.txt               what the robot perceives, for the generator
 └── judge_physical_facts.txt     the facts a tree must respect, for the judge only
 ```
 
 A line `{{include: file.txt}}` is replaced by that file's text when the prompt is loaded
 ([modules/prompt_files.py](modules/prompt_files.py)), so the model receives one continuous
-prompt. The path is relative to the file that contains the line. The robot and the
-actions are described once, so the generator and the judge are told the same thing;
-changing either file changes both prompts. The generator has no physical-facts file on
+prompt. The path is relative to the file that contains the line. The robot is
+described once, so the generator and the judge are told the same thing. On this branch
+the actions are not: the generator's refer to objects as `@key`, the judge's still by id. The generator has no physical-facts file on
 purpose: it only translates, and physical rules belong to the judge. The generation
 prompt adds its own sections on the decorators and on building the tree.
 
