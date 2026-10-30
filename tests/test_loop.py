@@ -27,13 +27,17 @@ from modules.scene import SceneStage  # noqa: E402
 SCENE = 'scene8'
 COMMAND = 'shake the test tube two times'
 
-TUBE = 'transparent_test_tube_1'
-CAP = 'yellow_test_tube_cap_1'
+FIND_TUBE = 'FindOne(name="FindTube", key="tube", type="test tube")'
+FIND_CAP = 'FindOne(name="FindCap", key="cap", type="test tube cap")'
 
 
 def tree(*actions):
-    """A fenced create_behavior_tree() holding the given action lines."""
+    """A fenced create_behavior_tree() holding the given action lines.
+
+    It starts by finding the tube and its cap, which the actions refer to as @tube and @cap.
+    """
     names = [line.split('name="')[1].split('"')[0] for line in actions]
+    actions = (FIND_TUBE, FIND_CAP, *actions)
     variables = [f'node_{i}' for i, _ in enumerate(actions, start=1)]
     body = '\n'.join(f'        {variable} = {action}'
                      for variable, action in zip(variables, actions))
@@ -50,13 +54,13 @@ def tree(*actions):
             '```') if names else None
 
 
-CLOSE = f'Close(name="CloseTube", obj="{TUBE}", closing_obj="{CAP}")'
-SHAKE = f'Shake(name="ShakeTube", obj="{TUBE}", times=2)'
-SHAKE_UNKNOWN = 'Shake(name="ShakeTube", obj="transparent_test_tube_9", times=2)'
+CLOSE = 'Close(name="CloseTube", obj="@tube", closing_obj="@cap")'
+SHAKE = 'Shake(name="ShakeTube", obj="@tube", times=2)'
+SHAKE_UNKNOWN = 'Shake(name="ShakeTube", obj="@flask", times=2)'
 
 GOOD_TREE = tree(CLOSE, SHAKE)
 TREE_WITHOUT_CLOSE = tree(SHAKE)
-TREE_WITH_WRONG_ID = tree(SHAKE_UNKNOWN)
+TREE_WITH_UNKNOWN_KEY = tree(SHAKE_UNKNOWN)
 
 ANALYSIS = 'SECRET-ANALYSIS: every requested action is there; the tube is shaken open.'
 ACCEPT = '{"analysis": "All checks pass.", "verdict": "accept", "errors": [], "reason": ""}'
@@ -144,18 +148,18 @@ def test_three_rejections_end_the_run(run):
 
 # --- 4-5: the syntax check decides -------------------------------------------
 
-def test_wrong_id_is_repaired(run):
-    record, scripted, _ = run([TREE_WITH_WRONG_ID, GOOD_TREE], [ACCEPT])
+def test_unknown_key_is_repaired(run):
+    record, scripted, _ = run([TREE_WITH_UNKNOWN_KEY, GOOD_TREE], [ACCEPT])
     assert record['status'] == 'accepted'
     assert record['counts']['syntax_failures'] == 1
 
     second = scripted.messages('generator')[1]
     assert 'SYNTAX CHECK ERRORS:' in second
-    assert 'transparent_test_tube_9' in second
+    assert 'no node stores "flask"' in second
 
 
 def test_three_syntax_failures_end_the_run(run):
-    record, scripted, _ = run([TREE_WITH_WRONG_ID] * 3, [])
+    record, scripted, _ = run([TREE_WITH_UNKNOWN_KEY] * 3, [])
     assert record['status'] == 'failed_syntax_cap'
     assert record['counts']['syntax_failures'] == 3
     assert record['counts']['judge_calls'] == 0
@@ -215,7 +219,7 @@ def test_baseline_keeps_the_first_tree_unjudged(run):
 
 
 def test_baseline_repairs_a_syntax_failure(run):
-    record, scripted, _ = run([TREE_WITH_WRONG_ID, GOOD_TREE], judge_enabled=False)
+    record, scripted, _ = run([TREE_WITH_UNKNOWN_KEY, GOOD_TREE], judge_enabled=False)
     assert record['status'] == 'no_judge'
     assert record['counts']['generator_calls'] == 2
     assert record['counts']['syntax_failures'] == 1
@@ -223,7 +227,7 @@ def test_baseline_repairs_a_syntax_failure(run):
 
     second = scripted.messages('generator')[1]
     assert 'SYNTAX CHECK ERRORS:' in second
-    assert 'transparent_test_tube_9' in second
+    assert 'no node stores "flask"' in second
     assert not scripted.messages('judge')
 
 
@@ -235,7 +239,7 @@ def test_baseline_asks_again_for_missing_code(run):
 
 
 def test_three_syntax_failures_end_a_baseline_run(run):
-    record, scripted, _ = run([TREE_WITH_WRONG_ID] * 3, judge_enabled=False)
+    record, scripted, _ = run([TREE_WITH_UNKNOWN_KEY] * 3, judge_enabled=False)
     assert record['status'] == 'failed_syntax_cap'
     assert record['counts']['generator_calls'] == 3
     assert record['counts']['syntax_failures'] == 3
@@ -279,7 +283,7 @@ def test_the_judge_is_shown_its_earlier_judgement(run):
 
 
 def test_the_history_grows_and_skips_trees_that_were_never_judged(run):
-    _, scripted, _ = run([TREE_WITH_WRONG_ID, TREE_WITHOUT_CLOSE, TREE_WITHOUT_CLOSE,
+    _, scripted, _ = run([TREE_WITH_UNKNOWN_KEY, TREE_WITHOUT_CLOSE, TREE_WITHOUT_CLOSE,
                           GOOD_TREE], [REJECT, REJECT, ACCEPT])
     messages = scripted.messages('judge')
     # Attempt 1 failed the syntax check, so it was never judged and is not in the history.

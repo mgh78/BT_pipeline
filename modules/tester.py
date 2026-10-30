@@ -3,7 +3,7 @@
 This stage decides whether the generated ``create_behavior_tree()`` is well formed. It
 is a *static* test: the code is parsed and inspected, never run against the simulator.
 The only thing it executes is the construction of the tree itself, in a sandbox where
-the four action nodes are harmless stand-ins, which is the only way to prove that the
+the action, find and check nodes are harmless stand-ins, which is the only way to prove that the
 function really does return a tree.
 
 The checks are grouped, and each one reports on its own so a failure points at a line:
@@ -13,7 +13,9 @@ Structure  - the mandated try/except, the ``Root`` sequence, ``memory=True``,
              unique node names and variables, no orphaned nodes.
 Arguments  - each node gets exactly the arguments it takes, and counts such as
              ``times`` are integer literals.
-Scene      - every object id exists in the scene and is used in a role it can play.
+Objects    - find nodes describe objects with properties the robot perceives, every
+             object argument is an @key that a find node (or a ForEach) stored earlier,
+             and every key is used the way it was stored.
 Build      - the function constructs and returns a py_trees tree.
 
 A check marked ``warning`` is reported but does not stop the run; only a failed
@@ -331,6 +333,30 @@ class Analysis:
     def root(self):
         return self.node(self.returned) if self.returned else None
 
+    def parents(self):
+        """``{child variable: parent variable}`` for every node that is attached."""
+        return {child: target for target, children, _ in self.add_children
+                for child in children}
+
+    def tree_order(self):
+        """The variables reachable from the root, in the order the tree runs them."""
+        children = {}
+        for target, added, _ in self.add_children:
+            children.setdefault(target, []).extend(added)
+        order, seen = [], set()
+
+        def walk(variable):
+            if variable in seen:
+                return
+            seen.add(variable)
+            order.append(variable)
+            for child in children.get(variable, []):
+                walk(child)
+
+        if self.returned:
+            walk(self.returned)
+        return order
+
     @property
     def child_variables(self):
         used = []
@@ -348,7 +374,7 @@ class SyntaxTestStage(Stage):
     title = 'Syntax check'
     description = 'Parse and check the generated function. Nothing is executed on the robot.'
 
-    def check(self, code, scene=None):
+    def check(self, code):
         """Run every check against one piece of generated code.
 
         Returns ``(checks, built_tree_or_None, analysis_or_None)``. This is what the
@@ -377,8 +403,7 @@ class SyntaxTestStage(Stage):
         checks.extend(self._check_structure(analysis))
         checks.extend(self._check_arguments(analysis))
         checks.extend(self._check_properties(analysis))
-        if scene is not None:
-            checks.extend(self._check_scene(analysis, scene))
+        checks.extend(self._check_references(analysis))
 
         # --- Build -------------------------------------------------------
         built, build_checks = self._check_build(code, analysis)
@@ -393,11 +418,10 @@ class SyntaxTestStage(Stage):
 
     def execute(self, context, payload):
         code = payload.get('code')
-        scene = payload.get('scene_object')
         if not code:
             raise StageError('There is no generated code to check.')
 
-        checks, built, analysis = self.check(code, scene)
+        checks, built, analysis = self.check(code)
         return self._report(context, payload, checks, built=built, analysis=analysis)
 
     # --- Syntax group ----------------------------------------------------
@@ -647,49 +671,104 @@ class SyntaxTestStage(Stage):
             'every property and value is one the robot perceives' if not problems
             else '; '.join(problems), group='Objects')]
 
-    # --- Scene group -----------------------------------------------------
+    # --- References -------------------------------------------------------
 
-    def _check_scene(self, analysis, scene):
-        """Check every object id against the scene the model was shown."""
-        checks = []
-        unknown, wrong_role = [], []
+    def _check_references(self, analysis):
+        """Keys are stored once and used the way they were stored, and every object
+        argument is an @reference to something stored earlier."""
+        order = analysis.tree_order()
+        position = {variable: index for index, variable in enumerate(order)}
+        parents = analysis.parents()
+        key_problems, reference_problems = [], []
+
+        # What each key holds: one object (FindOne), a list (FindAll), or the current
+        # item of a loop (the target_key of a ForEach, valid inside that loop only).
+        stored = {}
+        for node in analysis.nodes:
+            if node.kind == 'find':
+                holds = 'list' if node.constructor == 'FindAll' else 'object'
+                self._store(stored, node, 'key', holds, key_problems)
+            elif node.constructor == 'py_trees.decorators.ForEach':
+                self._store(stored, node, 'target_key', 'item', key_problems)
 
         for node in analysis.nodes:
-            if node.kind != 'action':
-                continue
-            for argument, required in (
-                    (a, r) for (action, a), r in OBJECT_ARGUMENTS.items()
-                    if action == node.constructor):
-                value = node.values.get(argument, _UNKNOWN)
-                if not isinstance(value, str):
-                    continue  # a missing or non-literal id is already reported above
-                obj = scene.by_id(value)
-                if obj is None:
-                    unknown.append(f'line {node.lineno}: "{value}" is not in the scene')
-                    continue
-                if required == 'location' and not obj.is_location:
-                    wrong_role.append(f'line {node.lineno}: "{value}" is {obj.role}, not a '
-                                      f'valid location')
-                elif required == 'graspable' and obj.is_location:
-                    wrong_role.append(f'line {node.lineno}: "{value}" is a valid location '
-                                      f'and cannot be grasped')
-                elif required == 'container' and not obj.is_container:
-                    wrong_role.append(f'line {node.lineno}: nothing can be poured into '
-                                      f'"{value}" ({obj.name})')
-                elif required == 'cap' and not obj.is_cap:
-                    wrong_role.append(f'line {node.lineno}: "{value}" ({obj.name}) is not a '
-                                      f'cap or lid')
+            if node.variable not in position:
+                continue        # never attached: reported as an orphan
+            if node.constructor == 'py_trees.decorators.ForEach':
+                self._use(stored, node, 'source_key', node.values.get('source_key'),
+                          'list', position, parents, reference_problems, plain=True)
+            elif node.kind == 'action':
+                for (action, argument) in OBJECT_ARGUMENTS:
+                    if action == node.constructor:
+                        self._use(stored, node, argument, node.values.get(argument, _UNKNOWN),
+                                  'object', position, parents, reference_problems)
+            elif node.kind == 'condition':
+                self._use(stored, node, 'obj', node.values.get('obj', _UNKNOWN),
+                          'object', position, parents, reference_problems)
 
-        checks.append(Check(
-            'scene.ids', 'Every object id exists in the scene', not unknown,
-            f'all ids match scene {scene.number}' if not unknown else '; '.join(unknown),
-            group='Scene'))
-        checks.append(Check(
-            'scene.roles', 'Every object is used in a role it can play', not wrong_role,
-            'graspable objects are grasped, locations are used as locations'
-            if not wrong_role else '; '.join(wrong_role), group='Scene'))
+        return [
+            Check('objects.keys', 'Every key is a plain name that is stored once',
+                  not key_problems,
+                  f'{len(stored)} keys' if not key_problems else '; '.join(key_problems),
+                  group='Objects'),
+            Check('objects.references', 'Every object is an @key stored before it is used',
+                  not reference_problems,
+                  'every reference points at an object found earlier'
+                  if not reference_problems else '; '.join(reference_problems),
+                  group='Objects')]
 
-        return checks
+    @staticmethod
+    def _store(stored, node, argument, holds, problems):
+        key = node.values.get(argument, _UNKNOWN)
+        if not isinstance(key, str) or not key:
+            problems.append(f'line {node.lineno}: {argument} must be a plain name in quotes')
+        elif key.startswith('@'):
+            problems.append(f'line {node.lineno}: {argument}="{key}" is a plain name; '
+                            f'write the @ only where an object is used')
+        elif key in stored:
+            problems.append(f'line {node.lineno}: key "{key}" is already stored on line '
+                            f'{stored[key][0].lineno}; every key is stored once')
+        else:
+            stored[key] = (node, holds)
+
+    @staticmethod
+    def _use(stored, node, argument, value, wanted, position, parents, problems,
+             plain=False):
+        where = f'line {node.lineno}: {argument}'
+        if not isinstance(value, str):
+            problems.append(f'{where} must be a string in quotes')
+            return
+        if plain:
+            key = value
+        elif value.startswith('@'):
+            key = value[1:]
+        else:
+            problems.append(f'{where}="{value}" is not an @ reference; refer to an object '
+                            f'a find node stored, as "@key"')
+            return
+        if key not in stored:
+            problems.append(f'{where}="{value}": no node stores "{key}"')
+            return
+        owner, holds = stored[key]
+        if holds == 'item':
+            ancestor, inside = node.variable, False
+            while ancestor in parents:
+                ancestor = parents[ancestor]
+                inside = inside or ancestor == owner.variable
+            if not inside:
+                problems.append(f'{where}="{value}": "{key}" is the target of the ForEach '
+                                f'on line {owner.lineno} and can only be used inside it')
+            elif wanted == 'list':
+                problems.append(f'{where}="{value}": "{key}" is one item, not a list')
+            return
+        if position[owner.variable] > position[node.variable]:
+            problems.append(f'{where}="{value}": "{key}" is stored on line {owner.lineno}, '
+                            f'after this node runs')
+        elif holds != wanted:
+            problems.append(
+                f'{where}="{value}": "{key}" holds a list (FindAll); loop over it with '
+                f'ForEach and use the loop\'s target' if holds == 'list' else
+                f'{where}="{value}": "{key}" holds one object (FindOne), not a list')
 
     # --- Build group -----------------------------------------------------
 

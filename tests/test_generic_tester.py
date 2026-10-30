@@ -70,7 +70,7 @@ def test_a_property_the_robot_does_not_perceive_is_refused():
 def test_a_find_node_needs_a_key():
     checks, _ = run_checks(code(
         'find_1 = FindOne(name="FindBox", type="box")', root_children='find_1'))
-    assert failures(checks) == ['arguments.signatures']
+    assert failures(checks) == ['arguments.signatures', 'objects.keys']
 
 
 def test_findall_takes_limit_not_nth():
@@ -92,4 +92,5 @@ def test_has_property_with_a_wrong_property_or_value_is_refused(arguments):
         f'has_1 = HasProperty(name="Check", obj="@rack", {arguments})',
         root_children='find_1, has_1'))
     assert failures(checks) == ['objects.properties']
+
 

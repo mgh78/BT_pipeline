@@ -81,7 +81,7 @@ class GenerationLoopStage(Stage):
 
         def syntax_check(code, attempt):
             folder = attempt_folder(attempt)
-            checks, tree, analysis = tester.check(code, scene)
+            checks, tree, analysis = tester.check(code)
             passed = tester.passed(checks)
             # Kept for the window, which lets you look at any attempt, not only the
             # accepted one.
