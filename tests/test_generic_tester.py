@@ -174,3 +174,13 @@ def test_a_condition_inside_the_loop_can_test_the_item():
         'source_key="flasks", target_key="flask")',
         root_children='find_1, find_2, for_1'))
     assert failures(checks) == []
+
+
+def test_no_spill_label_for_a_tree_that_finds_its_objects():
+    from modules.scene import load_scene
+    from modules.tester import SyntaxTestStage, spill_label
+    _, _, analysis = SyntaxTestStage().check(code(
+        'find_1 = FindOne(name="FindTube", key="tube", type="test tube")',
+        'shake_1 = Shake(name="ShakeTube", obj="@tube", times=2)',
+        root_children='find_1, shake_1'))
+    assert spill_label(analysis, load_scene('scene8')) is None

@@ -930,6 +930,9 @@ def spill_label(analysis, scene):
     """
     if analysis is None or scene is None:
         return None
+    if any(str(node.values.get('obj', '')).startswith('@')
+           for node in analysis.nodes if node.kind == 'action'):
+        return None     # a generic tree finds its objects while it runs: none to look up here
 
     order = [node for node in analysis.nodes if node.kind == 'action']
     unclosed = []
