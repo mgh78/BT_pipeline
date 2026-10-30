@@ -29,19 +29,23 @@ what it found under a key, and later nodes use it.
   one.
 
 Finding and checking objects
-- FindOne(name, key, <properties>, position): finds one object that has all the given
-  properties and stores it under key. It fails when no object has them. When several
-  have them, it takes the first in scan order (left to right, then near to far), unless
-  position is given: "leftmost", "rightmost", "nearest" or "farthest".
-- FindAll(name, key, <properties>, limit): finds every object that has all the given
-  properties and stores them as a list under key, in scan order. limit, if given, keeps
-  only the first n. It succeeds even when nothing has the properties; the list is then
-  empty.
+- FindOne(name, key, <properties>, position, nth): finds one object that has all the
+  given properties and stores it under key. It fails when no object has them. Candidates
+  are ordered in scan order (left to right, then near to far), or from one end when
+  position is given: "leftmost", "rightmost", "nearest" or "farthest". It takes the nth
+  one in that order; nth is optional and defaults to 1. "The second box from the left"
+  is position="leftmost", nth=2. It fails when fewer than nth objects have the
+  properties.
+- FindAll(name, key, <properties>, limit, position): finds every object that has all the
+  given properties and stores them as a list under key, in scan order, or from the end
+  named by position. limit, if given, keeps only the first n of that order: "the two
+  rightmost cubes" is position="rightmost", limit=2. It succeeds even when nothing has
+  the properties; the list is then empty.
 - HasProperty(name, obj, property, value): succeeds when obj has that property with that
   value at the moment it runs, and fails otherwise. property is one of the property
   names above, written as a string; value is a literal.
 <properties> are keyword arguments named after the properties above, for example
-type="cuboid", color="red" or graspable=True. position and limit are optional.
+type="cuboid", color="red" or graspable=True. position, nth and limit are optional.
 
 {{include: generic_actions.txt}}
 
@@ -72,7 +76,8 @@ Describing the objects the command needs
 - Use only the property names and values listed above. The user's words may differ
   from them, for example "block" for a cuboid or "tube" for a test tube; use the listed
   value that means what the user said.
-- "Left", "right", "near" and "far" pick one object among several: use position.
+- "Left", "right", "near" and "far" pick objects among several: use position, with nth
+  for "the second from the left" or limit for "the two nearest".
 - One object ("the", "a") is a FindOne. Several objects ("every", "all", "both", a
   plural, a number above one) are a FindAll, with limit for a number, followed by a
   ForEach over the list.
