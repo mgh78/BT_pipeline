@@ -97,6 +97,11 @@ HELPER_SIGNATURES = {
     'py_trees.common.ComparisonExpression': (('variable', 'value', 'operator'), ()),
 }
 
+def perception_properties():
+    """The property names a find node may describe an object with: ``config.PERCEPTION_*``."""
+    return ('type', *config.PERCEPTION_COLOR_PROPERTIES, *config.PERCEPTION_BOOLEAN_PROPERTIES)
+
+
 def allowed_nodes():
     """The decorators, behaviours and helpers the prompt allows: ``config.GRAMMAR_*``.
 
@@ -165,7 +170,8 @@ class NodeCall:
     def __init__(self, variable, constructor, kind, call):
         self.variable = variable
         self.constructor = constructor
-        # 'action', 'sequence', 'selector', 'decorator' or 'behaviour'
+        # 'action', 'sequence', 'selector', 'decorator', 'behaviour', or for the nodes that
+        # find and check objects 'find' (FindOne, FindAll) and 'condition' (HasProperty)
         self.kind = kind
         self.lineno = call.lineno
         self.positional = list(call.args)
@@ -195,6 +201,11 @@ class NodeCall:
             return DECORATOR_SIGNATURES[self.constructor]
         if self.kind == 'behaviour':
             return BEHAVIOUR_SIGNATURES[self.constructor]
+        if self.kind in ('find', 'condition'):
+            required, optional = OBJECT_NODE_SIGNATURES[self.constructor]
+            if self.kind == 'find':      # a find node also takes the properties it looks for
+                optional = (*optional, *perception_properties())
+            return required, optional
         return (), ()
 
     def __repr__(self):
@@ -263,6 +274,9 @@ class Analysis:
         name = call.func.id if isinstance(call.func, ast.Name) else _dotted(call.func)
         if name in ACTION_SIGNATURES:
             self.nodes.append(NodeCall(variable, name, 'action', call))
+        elif name in OBJECT_NODE_SIGNATURES:
+            kind = 'condition' if name == 'HasProperty' else 'find'
+            self.nodes.append(NodeCall(variable, name, kind, call))
         elif name in COMPOSITES:
             self.nodes.append(NodeCall(variable, name, COMPOSITES[name], call))
         elif name in DECORATOR_SIGNATURES:
@@ -362,6 +376,7 @@ class SyntaxTestStage(Stage):
 
         checks.extend(self._check_structure(analysis))
         checks.extend(self._check_arguments(analysis))
+        checks.extend(self._check_properties(analysis))
         if scene is not None:
             checks.extend(self._check_scene(analysis, scene))
 
@@ -544,14 +559,16 @@ class SyntaxTestStage(Stage):
         checks = []
         problems = []
         with_arguments = [n for n in (*analysis.nodes, *analysis.helpers)
-                          if n.kind in ('action', 'decorator', 'behaviour', 'helper')]
+                          if n.kind in ('action', 'decorator', 'behaviour', 'helper',
+                                        'find', 'condition')]
         for node in with_arguments:
             required, optional = (HELPER_SIGNATURES[node.constructor] if node.kind == 'helper'
                                   else node.signature)
             given = set(node.arguments)
             missing = set(required) - given
             unexpected = given - set(required) - set(optional)
-            label = node.constructor if node.kind in ('action', 'helper') else node.short_name
+            label = (node.constructor if node.kind in ('action', 'helper', 'find', 'condition')
+                     else node.short_name)
             if node.positional:
                 problems.append(f'{label} on line {node.lineno} passes '
                                 f'{len(node.positional)} positional argument(s); the prompt '
@@ -561,7 +578,9 @@ class SyntaxTestStage(Stage):
                                 f'{", ".join(sorted(missing))}')
             if unexpected:
                 problems.append(f'{label} on line {node.lineno} does not take '
-                                f'{", ".join(sorted(unexpected))}')
+                                f'{", ".join(sorted(unexpected))}'
+                                + (f' (properties: {", ".join(perception_properties())})'
+                                   if node.kind == 'find' else ''))
 
         checks.append(Check(
             'arguments.signatures', 'Every node gets exactly its own arguments',
@@ -593,6 +612,40 @@ class SyntaxTestStage(Stage):
             else 'no literal name on: ' + ', '.join(
                 f'{n.variable} (line {n.lineno})' for n in unnamed), group='Arguments'))
         return checks
+
+    # --- Objects group ---------------------------------------------------
+
+    def _check_properties(self, analysis):
+        """Every property and value a find or check node uses must be one the robot has."""
+        problems = []
+        for node in analysis.nodes:
+            if node.kind == 'find':
+                for name in node.arguments:
+                    if name in perception_properties():
+                        problems.extend(_property_problem(node, name, node.values.get(name)))
+                position = node.values.get('position')
+                if 'position' in node.arguments and position not in config.FIND_POSITIONS:
+                    problems.append(f'line {node.lineno}: position={_shown(node, "position")}'
+                                    f' is not one of {", ".join(config.FIND_POSITIONS)}')
+                counted = 'nth' if node.constructor == 'FindOne' else 'limit'
+                value = node.values.get(counted, 1)
+                if counted in node.arguments and (
+                        not isinstance(value, int) or isinstance(value, bool) or value < 1):
+                    problems.append(f'line {node.lineno}: {counted}={_shown(node, counted)}'
+                                    f' is not a positive integer')
+            elif node.kind == 'condition':
+                name = node.values.get('property')
+                if name not in perception_properties():
+                    problems.append(f'line {node.lineno}: property={_shown(node, "property")}'
+                                    f' is not one of {", ".join(perception_properties())}')
+                else:
+                    problems.extend(_property_problem(
+                        node, name, node.values.get('value', _UNKNOWN), 'value'))
+        return [Check(
+            'objects.properties', 'Objects are described with properties the robot has',
+            not problems,
+            'every property and value is one the robot perceives' if not problems
+            else '; '.join(problems), group='Objects')]
 
     # --- Scene group -----------------------------------------------------
 
@@ -760,6 +813,29 @@ class SyntaxTestStage(Stage):
             StageStatus.FAILED if blocking else StageStatus.PASSED,
             summary=summary, detail=detail, artifacts=artifacts, checks=checks,
             error=blocking[0].message if blocking else None)
+
+
+def _shown(node, argument):
+    """An argument as written in the code, for a message."""
+    return ast.unparse(node.arguments[argument]) if argument in node.arguments else 'missing'
+
+
+def _property_problem(node, name, value, argument=None):
+    """What is wrong with ``name=value`` as a description of an object, as a list."""
+    written = _shown(node, argument or name)
+    where = f'line {node.lineno}: {name}={written}'
+    if value is _UNKNOWN:
+        return [f'{where} is not a literal']
+    if name == 'type':
+        if value not in config.PERCEPTION_TYPES:
+            return [f'{where} is not a type the robot perceives '
+                    f'({", ".join(config.PERCEPTION_TYPES)})']
+    elif name in config.PERCEPTION_COLOR_PROPERTIES:
+        if not isinstance(value, str) or value != value.lower():
+            return [f'{where} must be a lowercase colour name']
+    elif not isinstance(value, bool):
+        return [f'{where} must be True or False']
+    return []
 
 
 # --- Automatic labels (analysis only) -----------------------------------------
