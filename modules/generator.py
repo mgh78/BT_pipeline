@@ -89,9 +89,9 @@ class BTGenerator:
 def as_module(code, payload):
     """Wrap a generated function in a runnable module, for the record.
 
-    The imports name the action nodes the simulator will provide later; nothing in the
-    pipeline imports this file, it is saved so an accepted tree can be read and run on
-    its own once the executor exists.
+    The imports name the action, find and check nodes the simulator will provide later;
+    nothing in the pipeline imports this file, it is saved so an accepted tree can be read
+    and run on its own once the executor exists.
     """
     header = (
         f'# Scene:    {payload.get("scene")}\n'
@@ -100,6 +100,6 @@ def as_module(code, payload):
         f'# Model:    {payload.get("generation_model") or config.BT_GENERATION_MODEL}\n\n'
         'import logging\n\n'
         'import py_trees\n\n'
-        '# The action nodes are provided by the simulator side of the pipeline.\n'
-        'from bt_nodes import Place, Pour, Shake, Close\n\n\n')
+        '# The action, find and check nodes are provided by the simulator side.\n'
+        'from bt_nodes import Place, Pour, Shake, Close, FindOne, FindAll, HasProperty\n\n\n')
     return header + code + '\n'
