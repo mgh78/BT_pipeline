@@ -54,7 +54,8 @@ def test_endless_include_is_an_error(tmp_path):
 def test_real_prompts_assemble_completely(path):
     text = load_prompt(path)
     assert not INCLUDE_PATTERN.search(text)
-    assert '{scene_objects}' in text
+    if path == config.SEMANTIC_JUDGE_PROMPT_FILE:
+        assert '{scene_objects}' in text      # the generic generator is not shown the scene
 
 
 def test_both_prompts_include_the_shared_parts():

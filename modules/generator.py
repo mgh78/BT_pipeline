@@ -36,16 +36,15 @@ class BTGenerator:
         self.log = log
 
     def system_prompt(self, scene):
-        """The generation prompt with this scene's object list inserted.
+        """The generation prompt, with this scene's object list where it has the placeholder.
+
+        The generic prompt has none: the generator is not told what is on the table.
 
         Filled with ``str.replace``: the prompt contains the literal ``{e}`` of the
         except block, so ``str.format`` would break it.
         """
         path = config.BT_GENERATION_PROMPT_FILE
         prompt = load_prompt(path)
-        if '{scene_objects}' not in prompt:
-            self.log.warning('%s has no {scene_objects} placeholder — the model will '
-                             'not be told which objects are in the scene', path.name)
         return prompt.replace('{scene_objects}', scene.objects_block())
 
     @staticmethod
