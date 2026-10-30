@@ -76,3 +76,12 @@ def test_the_generation_prompt_has_no_physical_facts():
     assert 'Place(name, obj, location)' in generation
     # The generator is not given physical rules; they belong to the judge.
     assert 'Physical facts' not in generation
+
+
+def test_the_perception_vocabulary_in_the_config_is_in_the_prompt_file():
+    text = (config.SEMANTIC_JUDGE_PROMPT_FILE.parent / 'perception.txt').read_text()
+    flat = ' '.join(text.split())
+    for value in config.PERCEPTION_TYPES:
+        assert value in flat, value
+    for name in (*config.PERCEPTION_COLOR_PROPERTIES, *config.PERCEPTION_BOOLEAN_PROPERTIES):
+        assert f'- {name}:' in text, name

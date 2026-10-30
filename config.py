@@ -73,13 +73,25 @@ JUDGE_USE_STRUCTURED_OUTPUT = True
 JUDGE_ENABLED = True
 
 # The behavior tree grammar: the py_trees nodes the generation prompt allows besides the
-# four actions, Sequence and Selector. The syntax check refuses every other decorator,
-# behaviour and helper, so it enforces the grammar the prompt describes. Use py_trees
-# class names; modules/tester.py lists every node it knows how to check. When the prompt
-# gains or loses a node, change it here too.
-GRAMMAR_DECORATORS = ('Retry', 'Repeat', 'Timeout', 'FailureIsSuccess')
-GRAMMAR_BEHAVIOURS = ()     # py_trees.behaviours: none, the prompt has no conditions
+# four actions, the three find/check nodes, Sequence and Selector. The syntax check
+# refuses every other decorator, behaviour and helper, so it enforces the grammar the
+# prompt describes. Use py_trees class names; modules/tester.py lists every node it knows
+# how to check. When the prompt gains or loses a node, change it here too.
+GRAMMAR_DECORATORS = ('ForEach', 'Retry', 'Repeat', 'Timeout', 'FailureIsSuccess')
+GRAMMAR_BEHAVIOURS = ('Success',)   # py_trees.behaviours: the "otherwise do nothing" branch
 GRAMMAR_HELPERS = ()        # objects a behaviour is built from, e.g. 'ComparisonExpression'
+
+# What the robot perceives (prompts/perception.txt): the properties a find node describes
+# an object with. The type is a closed list; colours are lowercase names; the rest are
+# True/False. When perception.txt changes, change these too.
+PERCEPTION_TYPES = ('cube', 'cuboid', 'package', 'test tube', 'test tube cap',
+                    'test tube holder', 'foam test tube holder', 'measuring cylinder',
+                    'bottle', 'cup', 'bowl', 'box', 'crate', 'palette', 'container',
+                    'mortar')
+PERCEPTION_COLOR_PROPERTIES = ('color', 'liquid_color')
+PERCEPTION_BOOLEAN_PROPERTIES = ('graspable', 'holds_liquid', 'closed', 'marked')
+# Where FindOne and FindAll start counting.
+FIND_POSITIONS = ('leftmost', 'rightmost', 'nearest', 'farthest')
 
 # Models the GUI offers in its dropdowns.
 AVAILABLE_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-5',
