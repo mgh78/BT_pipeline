@@ -1,13 +1,14 @@
 What the robot perceives
 When the tree runs, the robot sees every object on the table and knows these properties
 of each one. Describe objects only with these names and values.
-- type: what the object is: cuboid, cylinder, package, test tube, test tube cap, bottle,
-  cup, box, crate, bowl, palette, container, mortar, test tube holder or foam test tube
-  holder.
-- color: the object's colour as a lowercase name, for example red, dark green, white,
-  brown or transparent.
-- liquid_color: the colour of the liquid in the object, for example blue; "" when it
-  holds none.
+- type: what the object is. One of: cube, cuboid, package, test tube, test tube cap,
+  test tube holder, foam test tube holder, measuring cylinder, bottle, cup, bowl, box,
+  crate, palette, container, mortar. A cube has equal sides; a cuboid is any other
+  rectangular block.
+- color: the object's colour as a lowercase name, for example red, blue, green,
+  dark green, yellow, white, grey, brown or transparent.
+- liquid_color: the colour of the liquid in the object, for example red, dark green,
+  black or transparent red; "" when it holds none.
 - graspable: True for objects the robot can pick up. False for objects that hold or
   support other objects (boxes, crates, bowls, palettes, containers, mortars and test
   tube holders): these are fixed in place and are only used as places to put things or
