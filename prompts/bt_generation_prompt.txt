@@ -43,7 +43,7 @@ Finding and checking objects
 <properties> are keyword arguments named after the properties above, for example
 type="cuboid", color="red" or graspable=True. position and limit are optional.
 
-{{include: actions.txt}}
+{{include: generic_actions.txt}}
 
 Decorators (py_trees.decorators)
 A decorator wraps exactly one child (an action, a composite or another decorator) and
