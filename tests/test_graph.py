@@ -38,7 +38,8 @@ def built():
 
 def test_each_node_gets_its_kind(built):
     root = graph.from_py_trees(built)
-    _, _, retry, set_1 = root.children
+    find_tube, _, retry, set_1 = root.children
+    assert (find_tube.kind, find_tube.type_name) == ('perception', 'FindOne')
     assert (root.kind, retry.kind, set_1.kind) == ('sequence', 'decorator', 'behaviour')
     assert retry.children[0].kind == 'action'
     assert retry.type_name == 'Retry' and set_1.type_name == 'SetBlackboardVariable'
@@ -56,7 +57,7 @@ def test_the_class_name_is_shown_under_a_decorator_title(built):
 def test_the_counts_include_decorators_and_behaviours(built):
     counts = graph.layout(graph.from_py_trees(built)).counts()
     assert counts['decorators'] == 1
-    assert counts['behaviours'] == 3      # two finds and the SetBlackboardVariable
+    assert counts['behaviours'] == 1 and counts['perception'] == 2
     assert counts['nodes'] == 6      # Root, two finds, Retry, Shake, SetBlackboardVariable
 
 
@@ -80,8 +81,8 @@ def test_a_saved_tree_can_be_redrawn(built):
 
 def test_the_legend_lists_only_the_node_types_in_the_tree(built):
     layout = graph.layout(graph.from_py_trees(built))
-    assert [row.kind for row in layout.legend] == ['sequence', 'action', 'decorator',
-                                                   'behaviour']
+    assert [row.kind for row in layout.legend] == ['sequence', 'action', 'perception',
+                                                   'decorator', 'behaviour']
     assert [row.name for row in layout.legend][:2] == ['Sequence', 'Action']
 
 
@@ -116,3 +117,10 @@ def test_the_dot_file_declares_the_legend(built):
         assert f'legend_{kind}' in dot
     assert 'legend_selector' not in dot          # this tree has no selector
     assert 'Condition / blackboard' in dot
+
+
+def test_a_find_node_is_drawn_in_its_own_colour(built, tmp_path):
+    layout = graph.layout(graph.from_py_trees(built))
+    assert config.GRAPH_COLORS['perception_border'] in graph.to_dot(layout)
+    find_tube = graph.from_py_trees(built).children[0]
+    assert find_tube.argument_lines == ['FindOne', 'key = tube', 'type = test tube']

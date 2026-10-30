@@ -136,9 +136,10 @@ class GraphView(customtkinter.CTkFrame):
 
     def _select(self, node):
         kind = {'sequence': 'Sequence', 'selector': 'Selector', 'decorator': 'Decorator',
+                'perception': 'Find / check',
                 'behaviour': 'Condition / blackboard'}.get(node.kind, 'Action')
         text = f'{kind}  ·  {node.label}'
-        if node.kind in ('decorator', 'behaviour') and node.type_name:
+        if node.kind in ('perception', 'decorator', 'behaviour') and node.type_name:
             text += f'  ({node.type_name})'
         if node.arguments:
             text += '\n' + '\n'.join(f'    {k} = {v}' for k, v in node.arguments.items())

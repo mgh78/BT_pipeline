@@ -980,6 +980,8 @@ def _sandbox(py_trees, source=''):
     class StubObjectNode(py_trees.behaviour.Behaviour):
         """A find or check node: records what it describes, finds nothing."""
 
+        perception = True       # how the graph tells these from the other behaviours
+
         def __init__(self, name='', **arguments):
             super().__init__(name=name)
             self.arguments = arguments

@@ -41,6 +41,8 @@ LEGEND = (
     ('sequence', 'Sequence', 'runs its children in order and stops at the first failure'),
     ('selector', 'Selector', 'tries its children in order until one succeeds'),
     ('action', 'Action', 'a robot action: Place, Pour, Shake or Close'),
+    ('perception', 'Find / check',
+     'finds objects by their properties, or checks a property of one'),
     ('decorator', 'Decorator',
      'wraps the node under it and changes how it runs or what it returns'),
     ('behaviour', 'Condition / blackboard',
@@ -53,8 +55,8 @@ SWATCH_WIDTH = 36
 SWATCH_HEIGHT = 18
 SWATCH_TEXT_GAP = 10
 
-MARKERS = {'sequence': '\u2192', 'selector': '?', 'action': '', 'decorator': '',
-           'behaviour': ''}
+MARKERS = {'sequence': '\u2192', 'selector': '?', 'action': '', 'perception': '',
+           'decorator': '', 'behaviour': ''}
 
 
 @dataclass
@@ -63,7 +65,8 @@ class GraphNode:
 
     id: str
     label: str
-    kind: str                      # 'sequence', 'selector', 'action', 'decorator', 'behaviour'
+    kind: str                      # 'sequence', 'selector', 'action', 'perception',
+                                   # 'decorator' or 'behaviour'
     arguments: dict = field(default_factory=dict)
     type_name: str = ''            # the py_trees class, shown for decorators and behaviours
     children: list = field(default_factory=list)
@@ -80,7 +83,7 @@ class GraphNode:
     @property
     def argument_lines(self):
         lines = [f'{key} = {value}' for key, value in self.arguments.items()]
-        if self.kind in ('decorator', 'behaviour') and self.type_name:
+        if self.kind in ('perception', 'decorator', 'behaviour') and self.type_name:
             lines.insert(0, self.type_name)
         return lines
 
@@ -149,6 +152,7 @@ class GraphLayout:
         return {
             'nodes': len(nodes),
             'actions': sum(1 for n in nodes if n.kind == 'action'),
+            'perception': sum(1 for n in nodes if n.kind == 'perception'),
             'sequences': sum(1 for n in nodes if n.kind == 'sequence'),
             'selectors': sum(1 for n in nodes if n.kind == 'selector'),
             'decorators': sum(1 for n in nodes if n.kind == 'decorator'),
@@ -183,6 +187,8 @@ def from_py_trees(root, prefix='n'):
             kind = 'decorator'
         elif hasattr(node, 'action'):      # the four actions; see tester._sandbox
             kind = 'action'
+        elif hasattr(node, 'perception'):  # FindOne, FindAll, HasProperty
+            kind = 'perception'
         else:
             kind = 'behaviour'
         arguments = {key: value for key, value in
@@ -365,7 +371,8 @@ def _draw_legend(draw, graph_layout, colors, scale, title_font, argument_font):
 
 # --- DOT and graphviz ---------------------------------------------------------
 
-SHAPES = {'sequence': 'box', 'selector': 'box', 'action': 'box', 'decorator': 'box',
+SHAPES = {'sequence': 'box', 'selector': 'box', 'action': 'box', 'perception': 'box',
+          'decorator': 'box',
           'behaviour': 'box'}
 
 

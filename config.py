@@ -139,6 +139,8 @@ GRAPH_COLORS = {
     'selector_border': '#d59b5b',
     'action_fill': '#2f4f3a',
     'action_border': '#6abf7b',
+    'perception_fill': '#2c5e6e',
+    'perception_border': '#5bc4d5',
     'decorator_fill': '#5a3a6e',
     'decorator_border': '#b57bd5',
     'behaviour_fill': '#6e5f2c',
