@@ -33,6 +33,14 @@ ACTION_SIGNATURES = {
     'Close': ('name', 'obj', 'closing_obj'),
 }
 
+# The nodes that find and check objects. FindOne and FindAll also take one keyword for
+# each property of config.PERCEPTION_*, so those are checked apart from this table.
+OBJECT_NODE_SIGNATURES = {
+    'FindOne': (('name', 'key'), ('position', 'nth')),
+    'FindAll': (('name', 'key'), ('position', 'limit')),
+    'HasProperty': (('name', 'obj', 'property', 'value'), ()),
+}
+
 # The composites the prompt allows, and what they are called in the graph.
 COMPOSITES = {
     'py_trees.composites.Sequence': 'sequence',
@@ -811,9 +819,21 @@ def _sandbox(py_trees, source=''):
         def update(self):
             return py_trees.common.Status.SUCCESS
 
+    class StubObjectNode(py_trees.behaviour.Behaviour):
+        """A find or check node: records what it describes, finds nothing."""
+
+        def __init__(self, name='', **arguments):
+            super().__init__(name=name)
+            self.arguments = arguments
+
+        def update(self):
+            return py_trees.common.Status.SUCCESS
+
     actions = {}
     for action in ACTION_SIGNATURES:
         actions[action] = type(action, (StubAction,), {'action': action})
+    for node in OBJECT_NODE_SIGNATURES:
+        actions[node] = type(node, (StubObjectNode,), {})
 
     return {'py_trees': _RecordingPyTrees(py_trees, _LambdaSources(source)),
             'logging': logging_module, '__builtins__': __builtins__, **actions}
