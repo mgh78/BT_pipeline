@@ -55,11 +55,18 @@ and its arguments, then the node's name in brackets.
 - "Selector" tries its children from top to bottom until one succeeds. It does not know
   why a child failed: a failed condition and a failed action both make it try the next
   child.
-- FindOne stores one object under its key and fails when no object on the table has all
-  the given properties; position and nth choose among several. FindAll stores a list
-  under its key and never fails; the list can be empty.
+- Find nodes order the objects that have all the given properties. Without position the
+  order is scan order: left to right (lowest y first), and among objects with the same y,
+  near to far (lowest x first). With position the order starts from one end:
+  "leftmost" is lowest y first, "rightmost" highest y first, "nearest" lowest x first
+  and "farthest" highest x first.
+- FindOne stores the nth object of that order under its key; nth defaults to 1. It
+  fails when fewer than nth objects have all the given properties.
+- FindAll stores the objects of that order as a list under its key. With limit it keeps
+  only the first limit objects. It never fails; the list can be empty.
 - HasProperty and HasCount are conditions: they succeed or fail, and change nothing.
-  HasCount compares the number of objects in a FindAll list with count.
+  HasCount compares the number of objects in a FindAll list with count: comparison is
+  "exactly" (the default), "at least" or "at most".
 - An argument written "@key" means the object stored under that key at the moment the
   node runs. A find node runs when the tree reaches it, so it sees the table as it is
   after the steps before it.
