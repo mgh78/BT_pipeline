@@ -63,7 +63,8 @@ do not also add that child to a composite. All arguments are keywords.
   after the last item. Inside the child the current object is "@" followed by
   target_key.
 - Inverter(name, child): turns the success of the child into failure and its failure
-  into success. Use it only around a condition, to mean "not".
+  into success. Use it only around a condition, to mean "not", and only when "not"
+  cannot be written as a value (see Choices, fallbacks and failures).
 - Retry(name, child, num_failures): runs the child again after it fails, until it has
   failed num_failures times. Use it for "try up to n times".
 - Repeat(name, child, num_success): runs the child again after it succeeds, until it has
@@ -131,12 +132,17 @@ use it differently, so tell them apart.
    - Use a Selector with one branch per case, in the order the user gave the cases.
    - Every branch is a Sequence whose first child is that case's own condition
      (HasProperty or HasCount), followed by the case's steps.
-   - "Otherwise" is a branch of its own whose condition is the earlier condition
-     wrapped in an Inverter: a second condition node with the same arguments.
+   - "Otherwise" is a branch of its own whose condition is the opposite of the earlier
+     condition, written as a second, separate condition node:
+     - For a True/False property, write the opposite with the other value, for example
+       HasProperty(property="marked", value=False) for "not marked".
+     - When the opposite is not a single value, such as "not red" or "not exactly two",
+       wrap a condition with the same arguments in an Inverter:
+       Inverter(HasProperty(property="color", value="red")).
    - When the user names no "otherwise", the last branch is the "do nothing" case: the
-     earlier conditions, each in its own Inverter, and no steps. With one condition it
-     is that single Inverter; with several it is a Sequence of one Inverter per
-     condition. It succeeds only when no case applies.
+     opposite of each earlier condition, written the same way, and no steps. With one
+     condition it is that single opposite; with several it is a Sequence of one
+     opposite per condition. It succeeds only when no case applies.
    So when a case's condition holds but one of its steps fails, no other branch can run
    and the choice fails.
 2. A fallback: the command names an alternative for when an action does not work ("try
