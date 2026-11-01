@@ -5,8 +5,8 @@
 
 import pytest
 
-from generic_trees import (FLASKS, LOOP, PLACE, RACK, code, failures, flasks_into_rack,
-                           run_checks)
+from generic_trees import (FLASKS, GLASS_BY_COUNT, LOOP, PLACE, RACK, code, failures,
+                           flasks_into_rack, run_checks)
 
 
 def test_a_generic_tree_passes():
@@ -186,3 +186,104 @@ def test_no_spill_label_for_a_tree_that_finds_its_objects():
         'shake_1 = Shake(name="ShakeTube", obj="@tube", times=2)',
         root_children='find_1, shake_1'))
     assert spill_label(analysis, load_scene('scene8')) is None
+
+
+# --- HasCount, Inverter, and find nodes anywhere in the tree ------------------------
+
+GLASS = 'find_1 = FindAll(name="FindGlass", key="glass", color="transparent")'
+
+
+def count(arguments):
+    return code(GLASS, f'count_1 = HasCount(name="TwoGlass", {arguments})',
+                root_children='find_1, count_1')
+
+
+def test_a_choice_by_count_passes():
+    checks, tree = run_checks(GLASS_BY_COUNT)
+    assert failures(checks) == []
+    no_case = tree.children[1].children[2]
+    assert [type(child).__name__ for child in no_case.children] == ['Inverter', 'Inverter']
+
+
+def test_has_count_is_a_stand_in_that_remembers_its_arguments():
+    from modules import graph
+    _, tree = run_checks(count('key="glass", count=2, comparison="at least"'))
+    has_count = tree.children[1]
+    assert type(has_count).__name__ == 'HasCount'
+    assert has_count.arguments == {'key': 'glass', 'count': 2, 'comparison': 'at least'}
+    assert graph.from_py_trees(tree).children[1].kind == 'perception'
+
+
+def test_has_count_on_one_object_is_refused():
+    refused(code(RACK, 'count_1 = HasCount(name="OneRack", key="rack", count=1)',
+                 root_children='find_1, count_1'),
+            'objects.references', 'holds one object (FindOne)')
+
+
+def test_has_count_on_a_loop_target_is_refused():
+    refused(code(FLASKS, 'count_1 = HasCount(name="CountFlask", key="flask", count=1)',
+                 'for_1 = py_trees.decorators.ForEach(name="ForEachFlask", child=count_1, '
+                 'source_key="flasks", target_key="flask")',
+                 root_children='find_2, for_1'),
+            'objects.references', 'one item of the ForEach')
+
+
+def test_has_count_takes_a_plain_key():
+    refused(count('key="@glass", count=2'), 'objects.references', 'without the @')
+
+
+@pytest.mark.parametrize('arguments', [
+    'key="glass", count=-1',
+    'key="glass", count="3"',
+    'key="glass", count=True',
+    'key="glass", count=2, comparison="more than"',
+])
+def test_has_count_with_a_wrong_count_or_comparison_is_refused(arguments):
+    checks, _ = run_checks(count(arguments))
+    assert failures(checks) == ['objects.properties']
+
+
+def test_an_inverter_around_a_condition_passes():
+    checks, _ = run_checks(code(
+        RACK,
+        'has_1 = HasProperty(name="RackIsBlue", obj="@rack", property="color", '
+        'value="blue")',
+        'not_1 = py_trees.decorators.Inverter(name="RackIsNotBlue", child=has_1)',
+        root_children='find_1, not_1'))
+    assert failures(checks) == []
+
+
+def test_an_inverter_around_an_action_is_refused():
+    refused(code(RACK, FLASKS, PLACE,
+                 'not_1 = py_trees.decorators.Inverter(name="NotPlaced", child=place_1)',
+                 LOOP.replace('child=place_1', 'child=not_1'),
+                 root_children='find_1, find_2, for_1'),
+            'structure.inverter', 'NotPlaced')
+
+
+def test_success_is_no_longer_allowed():
+    refused(code(RACK, 'skip_1 = py_trees.behaviours.Success(name="DoNothing")',
+                 root_children='find_1, skip_1'),
+            'structure.allowed_nodes', 'py_trees.behaviours.Success')
+
+
+def test_a_find_node_may_follow_an_action():
+    checks, _ = run_checks(code(
+        'find_1 = FindOne(name="FindTube", key="tube", type="test tube")',
+        'find_2 = FindOne(name="FindCap", key="cap", type="test tube cap")',
+        'close_1 = Close(name="CloseTube", obj="@tube", closing_obj="@cap")',
+        'find_3 = FindOne(name="FindClosedTube", key="closed_tube", type="test tube", '
+        'closed=True)',
+        'shake_1 = Shake(name="ShakeTube", obj="@closed_tube", times=2)',
+        root_children='find_1, find_2, close_1, find_3, shake_1'))
+    assert failures(checks) == []
+
+
+def test_a_find_node_may_sit_inside_a_loop():
+    checks, _ = run_checks(code(
+        FLASKS, RACK, PLACE,
+        'body_1 = py_trees.composites.Sequence(name="FindRackAndPlace", memory=True)',
+        'body_1.add_children([find_1, place_1])',
+        LOOP.replace('child=place_1', 'child=body_1'),
+        root_children='find_2, for_1'))
+    assert failures(checks) == []
