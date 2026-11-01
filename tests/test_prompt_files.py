@@ -64,10 +64,11 @@ def test_both_prompts_include_the_shared_parts():
     judge = load_prompt(config.SEMANTIC_JUDGE_PROMPT_FILE)
     robot = (folder / 'robot_and_workspace.txt').read_text().rstrip('\n')
     assert robot in generation and robot in judge
-    # The generic generator is told its actions with @ references; the judge keeps the
-    # id-based text.
-    assert (folder / 'generic_actions.txt').read_text().rstrip('\n') in generation
-    assert (folder / 'actions.txt').read_text().rstrip('\n') in judge
+    # Both read the generic actions, with @ references.
+    actions = (folder / 'generic_actions.txt').read_text().rstrip('\n')
+    assert actions in generation and actions in judge
+    perception = (folder / 'perception.txt').read_text().rstrip('\n')
+    assert perception in generation and perception in judge
     assert (folder / 'judge_physical_facts.txt').read_text().rstrip('\n') in judge
 
 
