@@ -10,12 +10,15 @@ The checks are grouped, and each one reports on its own so a failure points at a
 
 Syntax     - the code parses, and holds exactly one ``create_behavior_tree``.
 Structure  - the mandated try/except, the ``Root`` sequence, ``memory=True``,
-             unique node names and variables, no orphaned nodes.
+             unique node names and variables, no orphaned nodes, and an ``Inverter``
+             only around a condition (``HasProperty`` or ``HasCount``).
 Arguments  - each node gets exactly the arguments it takes, and counts such as
              ``times`` are integer literals.
 Objects    - find nodes describe objects with properties the robot perceives, every
              object argument is an @key that a find node (or a ForEach) stored earlier,
-             and every key is used the way it was stored.
+             and every key is used the way it was stored: a HasCount counts the list of
+             a FindAll, by its plain key. Find nodes may stand anywhere in the tree, as
+             long as each key is stored before it is used.
 Build      - the function constructs and returns a py_trees tree.
 
 A check marked ``warning`` is reported but does not stop the run; only a failed
@@ -35,13 +38,16 @@ ACTION_SIGNATURES = {
     'Close': ('name', 'obj', 'closing_obj'),
 }
 
-# The nodes that find and check objects. FindOne and FindAll also take one keyword for
-# each property of config.PERCEPTION_*, so those are checked apart from this table.
+# The nodes that find and check objects: two finds, and the conditions HasProperty and
+# HasCount. FindOne and FindAll also take one keyword for each property of
+# config.PERCEPTION_*, so those are checked apart from this table.
 OBJECT_NODE_SIGNATURES = {
     'FindOne': (('name', 'key'), ('position', 'nth')),
     'FindAll': (('name', 'key'), ('position', 'limit')),
     'HasProperty': (('name', 'obj', 'property', 'value'), ()),
+    'HasCount': (('name', 'key', 'count'), ('comparison',)),
 }
+CONDITIONS = ('HasProperty', 'HasCount')
 
 # The composites the prompt allows, and what they are called in the graph.
 COMPOSITES = {
@@ -173,7 +179,8 @@ class NodeCall:
         self.variable = variable
         self.constructor = constructor
         # 'action', 'sequence', 'selector', 'decorator', 'behaviour', or for the nodes that
-        # find and check objects 'find' (FindOne, FindAll) and 'condition' (HasProperty)
+        # find and check objects 'find' (FindOne, FindAll) and 'condition' (HasProperty,
+        # HasCount)
         self.kind = kind
         self.lineno = call.lineno
         self.positional = list(call.args)
@@ -277,7 +284,7 @@ class Analysis:
         if name in ACTION_SIGNATURES:
             self.nodes.append(NodeCall(variable, name, 'action', call))
         elif name in OBJECT_NODE_SIGNATURES:
-            kind = 'condition' if name == 'HasProperty' else 'find'
+            kind = 'condition' if name in CONDITIONS else 'find'
             self.nodes.append(NodeCall(variable, name, kind, call))
         elif name in COMPOSITES:
             self.nodes.append(NodeCall(variable, name, COMPOSITES[name], call))
@@ -575,6 +582,26 @@ class SyntaxTestStage(Stage):
             else f'{len(root_additions)} calls, on lines '
                  f'{", ".join(str(line) for line in root_additions)}',
             severity='warning', group='Structure'))
+
+        # An Inverter means "not": it may only wrap a condition.
+        not_conditions, first_line = [], None
+        for node in analysis.nodes:
+            if node.constructor != 'py_trees.decorators.Inverter':
+                continue
+            child = node.arguments.get('child')
+            inner = analysis.node(child.id) if isinstance(child, ast.Name) else None
+            if inner is None or inner.kind != 'condition':
+                shown = inner.short_name if inner is not None else _shown(node, 'child')
+                not_conditions.append(f'{node.node_name or node.variable} on line '
+                                      f'{node.lineno} wraps {shown}')
+                first_line = first_line or node.lineno
+        checks.append(Check(
+            'structure.inverter', 'An Inverter wraps only a condition',
+            not not_conditions,
+            'every Inverter wraps HasProperty or HasCount' if not not_conditions
+            else '; '.join(not_conditions) + ' (an Inverter may only wrap HasProperty or '
+                                             'HasCount, to mean "not")',
+            line=first_line, group='Structure'))
         return checks
 
     # --- Arguments group -------------------------------------------------
@@ -657,6 +684,17 @@ class SyntaxTestStage(Stage):
                         not isinstance(value, int) or isinstance(value, bool) or value < 1):
                     problems.append(f'line {node.lineno}: {counted}={_shown(node, counted)}'
                                     f' is not a positive integer')
+            elif node.constructor == 'HasCount':
+                count = node.values.get('count', _UNKNOWN)
+                if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                    problems.append(f'line {node.lineno}: count={_shown(node, "count")}'
+                                    f' is not a whole number of 0 or more')
+                comparison = node.values.get('comparison')
+                if 'comparison' in node.arguments and \
+                        comparison not in config.HAS_COUNT_COMPARISONS:
+                    problems.append(
+                        f'line {node.lineno}: comparison={_shown(node, "comparison")} is '
+                        f'not one of {", ".join(config.HAS_COUNT_COMPARISONS)}')
             elif node.kind == 'condition':
                 name = node.values.get('property')
                 if name not in perception_properties():
@@ -702,6 +740,9 @@ class SyntaxTestStage(Stage):
                     if action == node.constructor:
                         self._use(stored, node, argument, node.values.get(argument, _UNKNOWN),
                                   'object', position, parents, reference_problems)
+            elif node.constructor == 'HasCount':
+                self._use(stored, node, 'key', node.values.get('key', _UNKNOWN),
+                          'list', position, parents, reference_problems, plain=True)
             elif node.kind == 'condition':
                 self._use(stored, node, 'obj', node.values.get('obj', _UNKNOWN),
                           'object', position, parents, reference_problems)
@@ -738,6 +779,10 @@ class SyntaxTestStage(Stage):
         if not isinstance(value, str):
             problems.append(f'{where} must be a string in quotes')
             return
+        if plain and value.startswith('@'):
+            problems.append(f'{where}="{value}" names a key; write the plain name '
+                            f'"{value[1:]}", without the @')
+            return
         if plain:
             key = value
         elif value.startswith('@'):
@@ -759,7 +804,11 @@ class SyntaxTestStage(Stage):
                 problems.append(f'{where}="{value}": "{key}" is the target of the ForEach '
                                 f'on line {owner.lineno} and can only be used inside it')
             elif wanted == 'list':
-                problems.append(f'{where}="{value}": "{key}" is one item, not a list')
+                problems.append(f'{where}="{value}": "{key}" is one item of the ForEach on '
+                                f'line {owner.lineno}, not a list; '
+                                + ('count the list the ForEach loops over'
+                                   if node.constructor == 'HasCount'
+                                   else 'loop over a FindAll list'))
             return
         if position[owner.variable] > position[node.variable]:
             problems.append(f'{where}="{value}": "{key}" is stored on line {owner.lineno}, '
@@ -768,7 +817,9 @@ class SyntaxTestStage(Stage):
             problems.append(
                 f'{where}="{value}": "{key}" holds a list (FindAll); loop over it with '
                 f'ForEach and use the loop\'s target' if holds == 'list' else
-                f'{where}="{value}": "{key}" holds one object (FindOne), not a list')
+                f'{where}="{value}": "{key}" holds one object (FindOne), not a list'
+                + ('; HasCount counts the list of a FindAll'
+                   if node.constructor == 'HasCount' else ''))
 
     # --- Build group -----------------------------------------------------
 

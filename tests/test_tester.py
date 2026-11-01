@@ -95,8 +95,9 @@ def test_a_decorator_inside_a_decorator_passes(full_grammar):
         f'shake_1 = {SHAKE}',
         'timeout_1 = py_trees.decorators.Timeout(name="TimeoutShake", child=shake_1, '
         'duration=5)',
-        'invert_1 = py_trees.decorators.Inverter(name="InvertShake", child=timeout_1)',
-        root_children='invert_1'))
+        'retry_1 = py_trees.decorators.Retry(name="RetryShake", child=timeout_1, '
+        'num_failures=2)',
+        root_children='retry_1'))
     assert failures(checks) == []
 
 
@@ -240,10 +241,10 @@ def test_the_four_decorators_of_the_prompt_pass():
 def test_a_decorator_the_prompt_does_not_name_is_not_allowed():
     checks, _ = run_checks(code(
         f'shake_1 = {SHAKE}',
-        'invert_1 = py_trees.decorators.Inverter(name="NotShake", child=shake_1)',
-        root_children='invert_1'))
+        'flip_1 = py_trees.decorators.SuccessIsFailure(name="FlipShake", child=shake_1)',
+        root_children='flip_1'))
     assert failures(checks) == ['structure.allowed_nodes']
-    assert 'py_trees.decorators.Inverter' in checks['structure.allowed_nodes'].message
+    assert 'SuccessIsFailure' in checks['structure.allowed_nodes'].message
 
 
 def test_the_prompt_has_no_conditions_so_they_are_not_allowed():
@@ -258,9 +259,9 @@ def test_the_prompt_has_no_conditions_so_they_are_not_allowed():
 
 def test_the_grammar_follows_the_config(monkeypatch):
     monkeypatch.setattr(config, 'GRAMMAR_DECORATORS',
-                        (*config.GRAMMAR_DECORATORS, 'Inverter'))
+                        (*config.GRAMMAR_DECORATORS, 'SuccessIsFailure'))
     checks, _ = run_checks(code(
         f'shake_1 = {SHAKE}',
-        'invert_1 = py_trees.decorators.Inverter(name="NotShake", child=shake_1)',
-        root_children='invert_1'))
+        'flip_1 = py_trees.decorators.SuccessIsFailure(name="FlipShake", child=shake_1)',
+        root_children='flip_1'))
     assert failures(checks) == []

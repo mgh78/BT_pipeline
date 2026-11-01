@@ -167,7 +167,9 @@ def test_a_condition_inside_the_loop_can_test_the_item():
         PLACE,
         'seq_1 = py_trees.composites.Sequence(name="PlaceIfFull", memory=True)',
         'seq_1.add_children([has_1, place_1])',
-        'skip_1 = py_trees.behaviours.Success(name="LeaveFlask")',
+        'has_2 = HasProperty(name="FlaskHoldsLiquidCheck", obj="@flask", '
+        'property="holds_liquid", value=True)',
+        'skip_1 = py_trees.decorators.Inverter(name="FlaskIsEmpty", child=has_2)',
         'pick_1 = py_trees.composites.Selector(name="FullOrNot", memory=True)',
         'pick_1.add_children([seq_1, skip_1])',
         'for_1 = py_trees.decorators.ForEach(name="ForEachFlask", child=pick_1, '
