@@ -90,14 +90,26 @@ for_1 = py_trees.decorators.ForEach(name="ForEachFlask", child=place_1,
   several, so "the second box from the left" is `position="leftmost", nth=2`.
 - `FindAll(name, key, <properties>, limit, position)` stores a list, which
   `py_trees.decorators.ForEach` loops over.
-- `HasProperty(name, obj, property, value)` checks an object while the tree runs, for
-  "if …, otherwise …" commands, with `py_trees.behaviours.Success` as an empty
-  "otherwise".
+- `HasProperty(name, obj, property, value)` is a condition: it checks an object while
+  the tree runs, for "if …, otherwise …" commands.
+- `HasCount(name, key, count, comparison)` is a condition on a `FindAll` list: it
+  succeeds when the list holds `count` objects. `comparison` is `"exactly"` (the
+  default), `"at least"` or `"at most"` (`HAS_COUNT_COMPARISONS`). `key` is the plain
+  key of a `FindAll`, never an `@` reference, a `FindOne` key or a `ForEach` target.
+- `py_trees.decorators.Inverter` means "not" and may only wrap `HasProperty` or
+  `HasCount`. A choice is a `Selector` with one branch per case, each starting with its
+  condition; "otherwise" is the condition again inside an `Inverter`, and a choice with
+  no "otherwise" ends in a branch made only of inverted conditions. `Success` is no
+  longer part of the grammar.
+- Find nodes can stand anywhere: inside a branch, inside a `ForEach`, or after an
+  action, so an object is found right before it is used. A key must only be stored
+  before it is used, in the order the tree runs.
 - Every object argument is `"@key"`; a key is a plain name.
 
 The property vocabulary is also in [config.py](config.py) (`PERCEPTION_TYPES`,
-`PERCEPTION_COLOR_PROPERTIES`, `PERCEPTION_BOOLEAN_PROPERTIES`, `FIND_POSITIONS`) for the
-syntax check; a test makes sure the two agree. The find and check nodes are inert
+`PERCEPTION_COLOR_PROPERTIES`, `PERCEPTION_BOOLEAN_PROPERTIES`, `FIND_POSITIONS`,
+`HAS_COUNT_COMPARISONS`) for the syntax check; tests make sure they agree with the
+prompts. The find and check nodes are inert
 stand-ins in the sandbox, like the actions: the real ones come with the executor. The
 judge has **not** been adapted yet: its prompt still expects object ids. Test the
 generator with the judge switched off and enrichment off (enrichment rewrites the command
@@ -320,9 +332,9 @@ described afterwards.
 | Group | Checks |
 |---|---|
 | Syntax | the code parses; there is exactly one `create_behavior_tree`; nothing else at top level |
-| Structure | the body is one `try/except` with the mandated `logging.error` line; the root is a `Sequence` named `Root`; every composite has `memory=True`; only the nodes the prompt allows are used (the four actions, `Sequence`, `Selector` and the py_trees nodes in `GRAMMAR_DECORATORS`, `GRAMMAR_BEHAVIOURS` and `GRAMMAR_HELPERS`); node names and variables are unique; no orphaned node, no node with two parents (a decorator's `child=` counts as its parent), no child that was never created |
+| Structure | the body is one `try/except` with the mandated `logging.error` line; the root is a `Sequence` named `Root`; every composite has `memory=True`; only the nodes the prompt allows are used (the four actions, `Sequence`, `Selector` and the py_trees nodes in `GRAMMAR_DECORATORS`, `GRAMMAR_BEHAVIOURS` and `GRAMMAR_HELPERS`); node names and variables are unique; no orphaned node, no node with two parents (a decorator's `child=` counts as its parent), no child that was never created; an `Inverter` wraps only a condition (`HasProperty` or `HasCount`) |
 | Arguments | every action, decorator and behaviour gets exactly its own keyword arguments; counts (`Shake(times=…)`, `Retry(num_failures=…)`, `Repeat(num_success=…)`) are integer literals; every node has a literal name |
-| Objects | find nodes use only the properties and values in `PERCEPTION_*` (`type` from the closed list, colours lowercase, the rest `True`/`False`); `position` is one of `FIND_POSITIONS`; `nth` and `limit` are positive integers; every key is a plain name stored once; every object argument is an `"@key"` stored by a find node that runs earlier, or the `target_key` of a `ForEach` it sits inside; a `FindAll` list is only looped over and a `FindOne` object is never looped over |
+| Objects | find nodes use only the properties and values in `PERCEPTION_*` (`type` from the closed list, colours lowercase, the rest `True`/`False`); `position` is one of `FIND_POSITIONS`; `nth` and `limit` are positive integers; every key is a plain name stored once; every object argument is an `"@key"` stored by a find node that runs earlier, or the `target_key` of a `ForEach` it sits inside; a `FindAll` list is only looped over or counted, and a `FindOne` object is never looped over; `HasCount` names the plain key of a `FindAll`, its `count` is an integer of 0 or more and its `comparison` one of `HAS_COUNT_COMPARISONS`; find nodes may stand anywhere, as long as each key is stored before it is used |
 | Build | the function loads, constructs, and returns a real `py_trees` node with the expected number of nodes |
 
 A failed check marked *warning* is reported but does not stop the run. Only a failed
@@ -397,7 +409,7 @@ declares them, in the canvas, in `bt_graph.png` and in the `.dot` file:
 | Sequence | blue | `→` | runs its children in order and stops at the first failure |
 | Selector | orange | `?` | tries its children in order until one succeeds |
 | Action | green | — | a robot action: Place, Pour, Shake or Close; the box lists its arguments |
-| Find / check | teal | — | `FindOne`, `FindAll` or `HasProperty`: finds objects by their properties, or checks a property of one |
+| Find / check | teal | — | `FindOne`, `FindAll`, `HasProperty` or `HasCount`: finds objects by their properties, or checks a property or how many were found |
 | Decorator | purple | — | wraps the node under it and changes how it runs or what it returns; the class name is under the title |
 | Condition / blackboard | yellow | — | checks or sets a blackboard value, or always succeeds or fails (only when the grammar allows such nodes) |
 
