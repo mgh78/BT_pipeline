@@ -42,7 +42,7 @@ LEGEND = (
     ('selector', 'Selector', 'tries its children in order until one succeeds'),
     ('action', 'Action', 'a robot action: Place, Pour, Shake or Close'),
     ('perception', 'Find / check',
-     'finds objects by their properties, or checks a property of one'),
+     'finds objects by their properties, or checks a property or how many were found'),
     ('decorator', 'Decorator',
      'wraps the node under it and changes how it runs or what it returns'),
     ('behaviour', 'Condition / blackboard',
@@ -187,7 +187,7 @@ def from_py_trees(root, prefix='n'):
             kind = 'decorator'
         elif hasattr(node, 'action'):      # the four actions; see tester._sandbox
             kind = 'action'
-        elif hasattr(node, 'perception'):  # FindOne, FindAll, HasProperty
+        elif hasattr(node, 'perception'):  # FindOne, FindAll, HasProperty, HasCount
             kind = 'perception'
         else:
             kind = 'behaviour'
