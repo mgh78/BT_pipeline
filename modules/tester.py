@@ -589,19 +589,26 @@ class SyntaxTestStage(Stage):
             if node.constructor != 'py_trees.decorators.Inverter':
                 continue
             child = node.arguments.get('child')
-            inner = analysis.node(child.id) if isinstance(child, ast.Name) else None
-            if inner is None or inner.kind != 'condition':
-                shown = inner.short_name if inner is not None else _shown(node, 'child')
-                not_conditions.append(f'{node.node_name or node.variable} on line '
-                                      f'{node.lineno} wraps {shown}')
-                first_line = first_line or node.lineno
+            label = f'{node.node_name or node.variable} on line {node.lineno}'
+            if isinstance(child, ast.Call):
+                not_conditions.append(
+                    f'{label} creates its child inside the Inverter; create the '
+                    f'condition first as its own variable, then pass it as child=')
+            elif not isinstance(child, ast.Name) or analysis.node(child.id) is None:
+                not_conditions.append(f'{label}: child={_shown(node, "child")} is not a '
+                                      f'node created above')
+            elif analysis.node(child.id).kind != 'condition':
+                not_conditions.append(
+                    f'{label} wraps {analysis.node(child.id).short_name}; an Inverter '
+                    f'may only wrap HasProperty or HasCount, to mean "not"')
+            else:
+                continue
+            first_line = first_line or node.lineno
         checks.append(Check(
             'structure.inverter', 'An Inverter wraps only a condition',
             not not_conditions,
             'every Inverter wraps HasProperty or HasCount' if not not_conditions
-            else '; '.join(not_conditions) + ' (an Inverter may only wrap HasProperty or '
-                                             'HasCount, to mean "not")',
-            line=first_line, group='Structure'))
+            else '; '.join(not_conditions), line=first_line, group='Structure'))
         return checks
 
     # --- Arguments group -------------------------------------------------

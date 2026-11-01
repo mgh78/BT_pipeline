@@ -287,3 +287,12 @@ def test_a_find_node_may_sit_inside_a_loop():
         LOOP.replace('child=place_1', 'child=body_1'),
         root_children='find_2, for_1'))
     assert failures(checks) == []
+
+
+def test_an_inverter_with_its_condition_written_inside_is_refused():
+    refused(code(RACK,
+                 'not_1 = py_trees.decorators.Inverter(name="RackIsNotBlue", '
+                 'child=HasProperty(name="RackIsBlue", obj="@rack", property="color", '
+                 'value="blue"))',
+                 root_children='find_1, not_1'),
+            'structure.inverter', 'create the condition first as its own variable')
