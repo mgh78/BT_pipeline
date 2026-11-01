@@ -6,7 +6,8 @@ of each one. Describe objects only with these names and values.
   crate, palette, container, mortar. A cube has equal sides; a cuboid is any other
   rectangular block.
 - color: the object's colour as a lowercase name, for example red, blue, green,
-  dark green, yellow, white, grey, brown or transparent.
+  dark green, yellow, white, grey, brown or transparent. Glass objects are transparent:
+  describe them with color="transparent".
 - liquid_color: the colour of the liquid in the object, for example red, dark green,
   black or transparent red; "" when it holds none.
 - graspable: True for objects the robot can pick up. False for objects that hold or
