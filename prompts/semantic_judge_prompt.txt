@@ -3,18 +3,25 @@ user's command, the objects on the table, and a behavior tree that another model
 for that command. You decide whether the tree may be executed for this task, and you
 answer with a judgement form.
 
-The tree will be executed exactly as written. Accept it only if running it in this scene
-does everything the user asked, adds nothing that harms the task, and can be physically
-carried out by the robot. Otherwise reject it and say precisely what is wrong: your
-reason is sent back to the tree's author so that it can fix the tree.
+The tree is generic. It never names a particular object: it describes the objects it
+needs by their properties, the robot finds them while the tree runs, and the rest of the
+tree refers to what was found. Its author was not shown the table, so the same tree is
+meant to do the task on any table. You are shown the table, so that you can check what
+the tree does on it.
+
+The tree will be executed exactly as written. Accept it only if:
+- running it on this table does everything the user asked, adds nothing that harms the
+  task, and can be physically carried out by the robot; and
+- its logic does the task the user asked on any table, not only on this one.
+Otherwise reject it and say precisely what is wrong: your reason is sent back to the
+tree's author so that it can fix the tree.
 
 Input
 The user message contains:
 - ORIGINAL COMMAND: what the user said. This is what the tree must achieve.
 - REWRITTEN COMMAND (if present): the command after another model mapped the user's
-  words to the names of the objects in the scene, for example "red container" to "red
-  box". The tree's author worked from this version. The mapping is usually right, but it
-  can be wrong.
+  words to the names of the objects in the scene. The tree's author worked from this
+  version. The mapping is usually right, but it can be wrong.
 - EARLIER JUDGEMENTS (if present): what you decided about earlier trees written for this
   same command, each with its tree, verdict, errors and reason. They show what has
   already been found. Judge the new tree on its own merits: it may fix what you found,
@@ -23,36 +30,59 @@ The user message contains:
 
 {{include: robot_and_workspace.txt}}
 
-Scene
-Each line gives an object's id followed by its attributes.
-{scene_objects}
+{{include: perception.txt}}
 
-{{include: actions.txt}}
+Scene
+Each line gives an object's id followed by its attributes. The tree's author did not see
+this list.
+{scene_objects}
+How the list matches the properties above:
+- type is the object's name. A name with "marked" in it, such as "marked package", is
+  an object of the type without that word ("package") that has marked=True.
+- An object marked "valid location" has graspable=False; every other object has
+  graspable=True.
+- An object with "contains ... liquid" has holds_liquid=True and that liquid_color.
+- At the start no object is closed.
+
+{{include: generic_actions.txt}}
 
 {{include: judge_physical_facts.txt}}
 
 How to read the tree
-One node per line, children indented under their parent.
+One node per line, children indented under their parent. Every line gives the node type
+and its arguments, then the node's name in brackets.
 - "Sequence" runs its children from top to bottom and stops as soon as one fails.
-- "Selector" tries its children from top to bottom until one succeeds; the later
-  children are fallbacks.
-- A decorator wraps the one node indented under it and changes how that node runs or what
-  it returns. "Retry" runs it again after it fails, "Repeat" runs it again after it
-  succeeds, "Timeout" fails it after some seconds, "Inverter" swaps success and failure,
+- "Selector" tries its children from top to bottom until one succeeds. It does not know
+  why a child failed: a failed condition and a failed action both make it try the next
+  child.
+- FindOne stores one object under its key and fails when no object on the table has all
+  the given properties; position and nth choose among several. FindAll stores a list
+  under its key and never fails; the list can be empty.
+- HasProperty and HasCount are conditions: they succeed or fail, and change nothing.
+  HasCount compares the number of objects in a FindAll list with count.
+- An argument written "@key" means the object stored under that key at the moment the
+  node runs. A find node runs when the tree reaches it, so it sees the table as it is
+  after the steps before it.
+- A decorator wraps the one node indented under it. "ForEach" runs it once for every
+  object in a list, with the current object under its target_key, and stops at the
+  first failure. "Inverter" swaps success and failure. "Retry" runs it again after it
+  fails, "Repeat" runs it again after it succeeds, "Timeout" fails it after some seconds,
   and "FailureIsSuccess" makes it optional.
-- A condition or blackboard node, such as CheckBlackboardVariableValue or
-  SetBlackboardVariable, is shown with its arguments. A condition succeeds or fails, and
-  that decides which branch of a Selector or Sequence goes on to run.
-- An action line gives the action type and its arguments, then the node's name in
-  brackets.
-Judge each action by its type and arguments. Node names are labels written by the tree's
+Judge each node by its type and arguments. Node names are labels written by the tree's
 author and can be wrong.
 
-
 How to judge
-Decide for yourself what needs to be checked for this command and this tree, then
-check the tree against each point. Base your judgement on the scene list, the actions
-and the physical facts above.
+Decide for yourself what needs to be checked for this command and this tree, then check
+the tree against each point. Base your judgement on the scene list, the properties, the
+actions and the physical facts above.
+- Work out which object or objects each find node finds on this table at the moment it
+  runs, and follow the tree from start to end on this table.
+- Then consider the other tables the command allows, such as a different number of
+  objects, other objects marked, or a case the command names not occurring, and check
+  that the tree's choices are still right.
+- A description is right when it means what the user said. When the user's words can
+  be read in more than one way, accept a reasonable reading that does the task on this
+  table.
 Do not rewrite the tree.
 
 Answer
@@ -65,5 +95,7 @@ verdict: Should this behavior tree be executed on the robot for this task? "acce
 "reject".
 errors: if you reject, one short phrase for each problem, in your own words; if you
 accept, an empty list.
-reason: if you reject, one sentence that explains the problem and names the node and
-objects involved; if you accept, an empty string.
+reason: if you reject, one sentence that explains the problem and names the node, its
+key and the properties involved. You may say what a find node finds or misses on this
+table, but do not list the objects on the table or their ids: the author must keep the
+tree generic. If you accept, an empty string.
