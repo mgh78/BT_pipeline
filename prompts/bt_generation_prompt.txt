@@ -69,8 +69,7 @@ do not also add that child to a composite. All arguments are keywords.
   "try X, but carry on if it fails".
 
 Describing the objects the command needs
-- Every object the command mentions gets a find node, including the places things go
-  to ("the blue box", "the palette").
+
 - Describe each object with only the properties the user mentioned, such as its type,
   colour or liquid colour, or whether it is marked.
 - Use only the property names and values listed above. The user's words may differ
@@ -87,8 +86,6 @@ Describing the objects the command needs
 
 Building the tree
 - The root is always py_trees.composites.Sequence(name="Root", memory=True).
-- The root's children are first the find nodes, in the order the command mentions their
-  objects, then the steps in the order they should run.
 - Give every find node its own key, and give every ForEach its own target_key. A node
   may use a key only after the node that stores it has run: an earlier find node, or the
   ForEach it sits inside.
