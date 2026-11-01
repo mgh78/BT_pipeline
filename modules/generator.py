@@ -101,5 +101,6 @@ def as_module(code, payload):
         'import logging\n\n'
         'import py_trees\n\n'
         '# The action, find and check nodes are provided by the simulator side.\n'
-        'from bt_nodes import Place, Pour, Shake, Close, FindOne, FindAll, HasProperty\n\n\n')
+        'from bt_nodes import Place, Pour, Shake, Close, FindOne, FindAll, HasProperty, '
+        'HasCount\n\n\n')
     return header + code + '\n'
