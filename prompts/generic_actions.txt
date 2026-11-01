@@ -1,6 +1,6 @@
 Actions
 These four are the only actions. Every argument except name and times is an @ reference
-to an object that a find node stored earlier (see The blackboard).
+to an object that a find node stored earlier.
 - Place(name, obj, location): puts obj at location. obj is graspable; location is an
   object that is not graspable, such as a box, crate, bowl, palette or test tube holder.
 - Pour(name, source, target): pours the liquid in source into target. source contains a
