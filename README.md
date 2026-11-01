@@ -44,9 +44,9 @@ The API key is read from `OPENAI_API_KEY`, or from
 | Tree graph | [modules/graph.py](modules/graph.py) | Lays the tree out once and draws it on the canvas, to a PNG and to a `.dot` file. |
 
 The four actions come from the manipulator prompt in the contextual-asr project: `Place`,
-`Pour`, `Shake`, `Close`. The generator may also use four py_trees decorators (`Retry`,
-`Repeat`, `Timeout`, `FailureIsSuccess`), but only where the command asks for what they
-do.
+`Pour`, `Shake`, `Close`. The generator may also use the py_trees decorators `Retry`,
+`Repeat`, `Timeout` and `FailureIsSuccess`, but only where the command asks for what they
+do; on `Generalizable-behaviour-tree` also `ForEach`, and `Inverter` around a condition.
 
 ## Where the behavior tree grammar comes from
 
