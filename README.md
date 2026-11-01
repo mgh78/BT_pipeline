@@ -110,10 +110,13 @@ The property vocabulary is also in [config.py](config.py) (`PERCEPTION_TYPES`,
 `PERCEPTION_COLOR_PROPERTIES`, `PERCEPTION_BOOLEAN_PROPERTIES`, `FIND_POSITIONS`,
 `HAS_COUNT_COMPARISONS`) for the syntax check; tests make sure they agree with the
 prompts. The find and check nodes are inert
-stand-ins in the sandbox, like the actions: the real ones come with the executor. The
-judge has **not** been adapted yet: its prompt still expects object ids. Test the
-generator with the judge switched off and enrichment off (enrichment rewrites the command
-with the scene's object names).
+stand-ins in the sandbox, like the actions: the real ones come with the executor.
+
+The judge judges generic trees too. Unlike the generator it is shown the scene's objects,
+so it can work out what each find node finds on this table, and it is asked whether the
+tree's logic would also be right on other tables. Its reason must not list the objects or
+their ids, so the generator's tree stays generic. Keep enrichment off for these runs:
+enrichment rewrites the command with the scene's object names.
 
 ## Who decides what
 
@@ -437,12 +440,13 @@ prompts/
 │                                {{include: perception.txt}}
 │                                {{include: generic_actions.txt}}
 ├── semantic_judge_prompt.txt    {{include: robot_and_workspace.txt}}
-│                                {{include: actions.txt}}
+│                                {{include: perception.txt}}
+│                                {{include: generic_actions.txt}}
 │                                {{include: judge_physical_facts.txt}}
 ├── robot_and_workspace.txt      the robot and the axes, shared by both prompts
-├── actions.txt                  the four actions with object ids, for the judge
-├── generic_actions.txt          the four actions with @ references, for the generator
-├── perception.txt               what the robot perceives, for the generator
+├── actions.txt                  the four actions with object ids (not used on this branch)
+├── generic_actions.txt          the four actions with @ references, shared by both prompts
+├── perception.txt               what the robot perceives, shared by both prompts
 └── judge_physical_facts.txt     the facts a tree must respect, for the judge only
 ```
 
