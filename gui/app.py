@@ -191,8 +191,11 @@ class App(customtkinter.CTk):
         self.command_box.grid(row=1, column=0, columnspan=3, padx=14, pady=(0, 8),
                               sticky='ew')
 
+        # The switches and Run share one row and the model menus get the row below: side
+        # by side they need more width than the column has on a laptop screen, and grid
+        # then shrinks the switches to nothing and draws the menus over them.
         switches = customtkinter.CTkFrame(box, fg_color='transparent')
-        switches.grid(row=2, column=0, padx=14, pady=(0, 12), sticky='w')
+        switches.grid(row=2, column=0, padx=14, pady=(0, 8), sticky='w')
 
         self.enrich_switch = customtkinter.CTkSwitch(
             switches, text='Enrich with the scene first', font=('Arial', 11))
@@ -204,10 +207,10 @@ class App(customtkinter.CTk):
             switches, values=[JUDGE_MODE, BASELINE_MODE], font=('Arial', 11),
             command=self.mode_changed)
         self.mode_selector.set(JUDGE_MODE)
-        self.mode_selector.grid(row=1, column=0, sticky='w', pady=(8, 0))
+        self.mode_selector.grid(row=0, column=1, sticky='w', padx=(12, 0))
 
         models = customtkinter.CTkFrame(box, fg_color='transparent')
-        models.grid(row=2, column=1, padx=6, pady=(0, 12), sticky='e')
+        models.grid(row=3, column=0, columnspan=2, padx=14, pady=(0, 12), sticky='w')
 
         customtkinter.CTkLabel(models, text='tree', text_color='gray60',
                                font=('Arial', 10)).grid(row=0, column=0, padx=(0, 4))
@@ -249,7 +252,7 @@ class App(customtkinter.CTk):
         self.run_button = customtkinter.CTkButton(
             box, text='Run pipeline', width=140, height=34, font=('Arial', 13, 'bold'),
             command=self.run_pipeline)
-        self.run_button.grid(row=2, column=2, padx=(6, 14), pady=(0, 12))
+        self.run_button.grid(row=2, column=1, padx=(6, 14), pady=(0, 8))
 
         # One panel per module.
         panels = customtkinter.CTkScrollableFrame(column, label_text='Pipeline modules',
