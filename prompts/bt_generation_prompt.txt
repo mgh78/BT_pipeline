@@ -137,8 +137,10 @@ use it differently, so tell them apart.
      - For a True/False property, write the opposite with the other value, for example
        HasProperty(property="marked", value=False) for "not marked".
      - When the opposite is not a single value, such as "not red" or "not exactly two",
-       wrap a condition with the same arguments in an Inverter:
-       Inverter(HasProperty(property="color", value="red")).
+       create a condition with the same arguments, then an Inverter around it:
+           has_2 = HasProperty(name="CubeIsRed", obj="@cube", property="color",
+                               value="red")
+           not_red = py_trees.decorators.Inverter(name="CubeIsNotRed", child=has_2)
    - When the user names no "otherwise", the last branch is the "do nothing" case: the
      opposite of each earlier condition, written the same way, and no steps. With one
      condition it is that single opposite; with several it is a Sequence of one
