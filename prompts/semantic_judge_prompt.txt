@@ -10,9 +10,7 @@ meant to do the task on any table. You are shown the table, so that you can chec
 the tree does on it.
 
 The tree will be executed exactly as written. Accept it only if:
-- running it on this table does everything the user asked, adds nothing that harms the
-  task, and can be physically carried out by the robot; and
-- its logic does the task the user asked on any table, not only on this one.
+- running it on this table does everything the user asked and can be physically carried out by the robot and its logic does the task the user asked
 Otherwise reject it and say precisely what is wrong: your reason is sent back to the
 tree's author so that it can fix the tree.
 
@@ -36,13 +34,7 @@ Scene
 Each line gives an object's id followed by its attributes. The tree's author did not see
 this list.
 {scene_objects}
-How the list matches the properties above:
-- type is the object's name. A name with "marked" in it, such as "marked package", is
-  an object of the type without that word ("package") that has marked=True.
-- An object marked "valid location" has graspable=False; every other object has
-  graspable=True.
-- An object with "contains ... liquid" has holds_liquid=True and that liquid_color.
-- At the start no object is closed.
+
 
 {{include: generic_actions.txt}}
 
@@ -82,11 +74,7 @@ How to judge
 Decide for yourself what needs to be checked for this command and this tree, then check
 the tree against each point. Base your judgement on the scene list, the properties, the
 actions and the physical facts above.
-- Work out which object or objects each find node finds on this table at the moment it
-  runs, and follow the tree from start to end on this table.
-- Then consider the other tables the command allows, such as a different number of
-  objects, other objects marked, or a case the command names not occurring, and check
-  that the tree's choices are still right.
+
 - A description is right when it means what the user said. When the user's words can
   be read in more than one way, accept a reasonable reading that does the task on this
   table.

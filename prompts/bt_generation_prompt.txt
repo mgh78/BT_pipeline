@@ -78,7 +78,7 @@ do not also add that child to a composite. All arguments are keywords.
 Describing the objects the command needs
 - Describe each object with only the properties the user mentioned, such as its type,
   colour or liquid colour, or whether it is marked.
-- Use only the property names and values listed above. The user's words may differ
+- Use only the property names and values from What the robot perceives .The user's words may differ
   from them, for example "block" for a cuboid or "tube" for a test tube; use the listed
   value that means what the user said.
 - "Left", "right", "near" and "far" pick objects among several: use position, with nth
