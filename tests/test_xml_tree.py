@@ -350,12 +350,10 @@ def test_the_registry_holds_exactly_the_leaves_of_the_grammar():
     assert set(bt_nodes.REGISTRY) == set(xml_tree.LEAVES)
 
 
-def test_a_built_tree_without_a_loop_ticks_with_the_stand_ins():
-    # The stand-in find nodes store nothing on the blackboard, so a tree with a ForEach
-    # cannot be ticked until the executor gives them their real update(). This one has
-    # none: every stand-in succeeds, so the first case of the choice runs.
+def test_a_tree_the_check_built_has_no_world_and_cannot_be_ticked():
+    # The check only builds. To run a tree, build it with bt_nodes.registry(world).
     import py_trees
     _, tree = run_checks(GLASS_BY_COUNT)
     behaviour_tree = py_trees.trees.BehaviourTree(tree)
-    behaviour_tree.tick()
-    assert tree.status == py_trees.common.Status.SUCCESS
+    with pytest.raises(RuntimeError, match='built without a world'):
+        behaviour_tree.tick()

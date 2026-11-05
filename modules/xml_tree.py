@@ -645,37 +645,61 @@ def _check_references(elements):
 
 # --- Building ----------------------------------------------------------------------
 
-def _build(text, root):
-    """Hand the document to the py_trees parser, then label the nodes for display."""
-    try:
-        from py_trees.parsers.behaviour_tree_xml import parse_behaviour_tree_xml
+class TreeMismatch(ValueError):
+    """The tree py_trees built does not have the shape of the XML."""
 
-        from modules import bt_nodes
-    except ImportError as error:
-        return None, [Check('build.py_trees', 'py_trees 2.6 or later is installed', False,
-                            f'{error} — install it with: pip install "py_trees>=2.6"',
-                            group='Build')]
+    def __init__(self, built, built_nodes, declared):
+        super().__init__(f'{declared} nodes were written but the built tree has {built_nodes}')
+        self.built = built
+
+
+def build_tree(text, node_registry=None):
+    """Build the XML with py_trees and give the nodes their XML names and arguments.
+    Uses bt_nodes.REGISTRY when no registry is given.
+
+    Raises TreeMismatch when the built tree does not have the shape of the XML, and
+    whatever the parser raises when it cannot build it.
+    """
+    from py_trees.parsers.behaviour_tree_xml import parse_behaviour_tree_xml
+
+    from modules import bt_nodes
 
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / 'tree.xml'
         path.write_text(text, encoding='utf-8')
-        try:
-            built = parse_behaviour_tree_xml(str(path), node_registry=bt_nodes.REGISTRY)
-        except Exception as error:  # noqa: BLE001 - every parser error is a failed build
-            return None, [Check('build.parse', 'py_trees builds the tree', False,
-                                f'{type(error).__name__}: {error}', group='Build')]
+        built = parse_behaviour_tree_xml(
+            str(path), node_registry=bt_nodes.REGISTRY if node_registry is None else node_registry)
+
+    root, _ = _locate_root(read_xml(text)[0])
+    built_nodes = sum(1 for _ in built.iterate())
+    declared = sum(1 for _ in root.walk())
+    if built_nodes != declared or not _label(built, root):
+        raise TreeMismatch(built, built_nodes, declared)
+    return built
+
+
+def _build(text, root):
+    """Build the document with :func:`build_tree` and report it as checks."""
+    mismatch = None
+    try:
+        built = build_tree(text)
+    except ImportError as error:
+        return None, [Check('build.py_trees', 'py_trees 2.6 or later is installed', False,
+                            f'{error} — install it with: pip install "py_trees>=2.6"',
+                            group='Build')]
+    except TreeMismatch as error:
+        mismatch, built = error, error.built
+    except Exception as error:  # noqa: BLE001 - every parser error is a failed build
+        return None, [Check('build.parse', 'py_trees builds the tree', False,
+                            f'{type(error).__name__}: {error}', group='Build')]
 
     checks = [Check('build.parse', 'py_trees builds the tree', True,
                     f'{type(built).__name__}(name="{root.name}")', group='Build')]
-    built_nodes = sum(1 for _ in built.iterate())
-    declared = sum(1 for _ in root.walk())
-    matches = built_nodes == declared and _label(built, root)
     checks.append(Check(
-        'build.node_count', 'Every node in the XML is in the built tree', matches,
-        f'{built_nodes} nodes' if matches
-        else f'{declared} nodes were written but the built tree has {built_nodes}',
+        'build.node_count', 'Every node in the XML is in the built tree', mismatch is None,
+        f'{sum(1 for _ in built.iterate())} nodes' if mismatch is None else str(mismatch),
         group='Build'))
-    return (built if matches else None), checks
+    return (None if mismatch else built), checks
 
 
 def _label(node, element):
