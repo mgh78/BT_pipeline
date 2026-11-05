@@ -4,7 +4,7 @@
 #
 #   ../contextual-asr/venv/bin/pip install -r requirements.txt
 
-py_trees>=2.2          # the behavior tree library the generated code uses
+py_trees>=2.6          # builds the generated XML tree (parsers.behaviour_tree_xml)
 pydot>=3.0             # DOT handling, used by the graph export
 graphviz>=0.20         # optional: renders bt_graph.dot when the dot binary exists
 openai>=1.0            # the generation and enrichment stages
