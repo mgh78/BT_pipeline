@@ -1,7 +1,7 @@
 """The pipeline window.
 
 Left to right it follows the run: the scene on the left, the command and the six
-module panels in the middle, and on the right the tree itself - as a graph, as code,
+module panels in the middle, and on the right the tree itself - as a graph, as XML,
 and as the list of checks it had to pass. The log of every module runs along the
 bottom.
 
@@ -285,7 +285,7 @@ class App(customtkinter.CTk):
 
         self.tabs = customtkinter.CTkTabview(column, corner_radius=8)
         self.tabs.grid(row=1, column=0, sticky='nsew')
-        for name in ('Tree graph', 'Code', 'Checks', 'Judge'):
+        for name in ('Tree graph', 'XML', 'Checks', 'Judge'):
             self.tabs.add(name)
             self.tabs.tab(name).grid_columnconfigure(0, weight=1)
             self.tabs.tab(name).grid_rowconfigure(0, weight=1)
@@ -293,7 +293,7 @@ class App(customtkinter.CTk):
         self.graph_view = GraphView(self.tabs.tab('Tree graph'), fg_color='transparent')
         self.graph_view.grid(row=0, column=0, sticky='nsew')
 
-        code_tab = self.tabs.tab('Code')
+        code_tab = self.tabs.tab('XML')
         self.code_box = customtkinter.CTkTextbox(code_tab, wrap='none', font=MONOSPACE)
         self.code_box.grid(row=0, column=0, sticky='nsew', padx=8, pady=8)
         self.code_box.configure(state='disabled')
@@ -471,11 +471,11 @@ class App(customtkinter.CTk):
         if attempt['kind'] == 'no_code':
             self._set_code(attempt.get('generator_reply') or '')
             self.check_table.show([])
-            self._set_judge('The reply held no create_behavior_tree() code block, so '
+            self._set_judge('The reply held no ```xml block with the tree, so '
                             'there was nothing to check or judge. It was sent back '
                             'asking for the tree.')
-            self.graph_view.clear('This reply held no code, so no tree was built.')
-            self.tabs.set('Code')
+            self.graph_view.clear('This reply held no XML tree, so no tree was built.')
+            self.tabs.set('XML')
             return
 
         self._set_code(attempt.get('code') or '')
@@ -556,7 +556,7 @@ class App(customtkinter.CTk):
         for entry in stored:
             folder = directory / 'attempts' / f'{entry["n"]:02d}'
             attempt = dict(entry)
-            code_file = folder / 'create_behavior_tree.py'
+            code_file = folder / 'tree.xml'
             if code_file.exists():
                 attempt['code'] = code_file.read_text(encoding='utf-8')
             report = folder / 'tester_report.json'

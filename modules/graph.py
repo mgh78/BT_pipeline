@@ -185,7 +185,7 @@ def from_py_trees(root, prefix='n'):
             kind = 'selector'
         elif _is_decorator(node):
             kind = 'decorator'
-        elif hasattr(node, 'action'):      # the four actions; see tester._sandbox
+        elif hasattr(node, 'action'):      # the four actions; see bt_nodes.py
             kind = 'action'
         elif hasattr(node, 'perception'):  # FindOne, FindAll, HasProperty, HasCount
             kind = 'perception'
