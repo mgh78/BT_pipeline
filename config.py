@@ -118,6 +118,13 @@ SYNTAX_FAILURE_LIMIT = 3    # the run ends at the 3rd tree the syntax check reje
 JUDGE_REJECTION_LIMIT = 3   # the run ends at the 3rd rejected tree (study design)
 JUDGE_FORMAT_RETRIES = 2    # extra judge calls when a reply is not a valid form
 
+# --- Mock world --------------------------------------------------------------
+
+# Shaking an open container that holds liquid spills it. The shake is still carried out
+# and the spill is recorded as a fault; True makes the spill fail the action instead.
+# A question for the supervisor.
+MOCK_SPILL_FAILS_ACTION = False
+
 # --- Logging -----------------------------------------------------------------
 
 CONSOLE_LOG_LEVEL = 'INFO'
