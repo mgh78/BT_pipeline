@@ -125,6 +125,10 @@ JUDGE_FORMAT_RETRIES = 2    # extra judge calls when a reply is not a valid form
 # A question for the supervisor.
 MOCK_SPILL_FAILS_ACTION = False
 
+# --- Running a tree ----------------------------------------------------------
+
+EXECUTION_MAX_TICKS = 200   # the executor stops a tree that has not finished by then
+
 # --- Logging -----------------------------------------------------------------
 
 CONSOLE_LOG_LEVEL = 'INFO'
