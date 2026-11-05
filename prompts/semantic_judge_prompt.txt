@@ -59,7 +59,7 @@ and its arguments, then the node's name in brackets.
 - HasProperty and HasCount are conditions: they succeed or fail, and change nothing.
   HasCount compares the number of objects in a FindAll list with count: comparison is
   "exactly" (the default), "at least" or "at most".
-- An argument written "@key" means the object stored under that key at the moment the
+- An argument written "{key}" means the object stored under that key at the moment the
   node runs. A find node runs when the tree reaches it, so it sees the table as it is
   after the steps before it.
 - A decorator wraps the one node indented under it. "ForEach" runs it once for every

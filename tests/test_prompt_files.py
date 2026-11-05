@@ -64,7 +64,7 @@ def test_both_prompts_include_the_shared_parts():
     judge = load_prompt(config.SEMANTIC_JUDGE_PROMPT_FILE)
     robot = (folder / 'robot_and_workspace.txt').read_text().rstrip('\n')
     assert robot in generation and robot in judge
-    # Both read the generic actions, with @ references.
+    # Both read the generic actions, with {key} references.
     actions = (folder / 'generic_actions.txt').read_text().rstrip('\n')
     assert actions in generation and actions in judge
     perception = (folder / 'perception.txt').read_text().rstrip('\n')
@@ -86,6 +86,14 @@ def test_the_perception_vocabulary_in_the_config_is_in_the_prompt_file():
         assert value in flat, value
     for name in (*config.PERCEPTION_COLOR_PROPERTIES, *config.PERCEPTION_BOOLEAN_PROPERTIES):
         assert f'- {name}:' in text, name
+
+
+def test_the_generation_prompt_asks_for_xml_and_every_decorator_of_the_config():
+    generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
+    assert '```xml' in generation and 'create_behavior_tree' not in generation
+    assert '@' not in generation          # references are written {key} now
+    for decorator in config.GRAMMAR_DECORATORS:
+        assert f'- {decorator}(name' in generation, decorator
 
 
 def test_the_has_count_comparisons_in_the_config_are_in_the_generation_prompt():
