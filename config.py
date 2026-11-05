@@ -72,15 +72,14 @@ JUDGE_USE_STRUCTURED_OUTPUT = True
 # compared against, so nothing else about the run may differ.
 JUDGE_ENABLED = True
 
-# The behavior tree grammar: the py_trees nodes the generation prompt allows besides the
-# four actions, the four find/check nodes, Sequence and Selector. The syntax check
-# refuses every other decorator, behaviour and helper, so it enforces the grammar the
-# prompt describes. Use py_trees class names; modules/tester.py lists every node it knows
-# how to check. When the prompt gains or loses a node, change it here too.
+# The behavior tree grammar: the decorators the generation prompt allows besides the four
+# actions, the four find/check nodes, Sequence and Selector. The generator writes the tree
+# as XML; the syntax check (modules/xml_tree.py) refuses every other tag, so it enforces
+# the grammar the prompt describes. Use py_trees class names, which are also the XML tags;
+# modules/xml_tree.py lists every decorator it knows how to check. When the prompt gains or
+# loses a decorator, change it here too.
 GRAMMAR_DECORATORS = ('ForEach', 'Inverter', 'Retry', 'Repeat', 'Timeout',
                       'FailureIsSuccess')
-GRAMMAR_BEHAVIOURS = ()     # py_trees.behaviours: none; "do nothing" is inverted conditions
-GRAMMAR_HELPERS = ()        # objects a behaviour is built from, e.g. 'ComparisonExpression'
 
 # What the robot perceives (prompts/perception.txt): the properties a find node describes
 # an object with. The type is a closed list; colours are lowercase names; the rest are
