@@ -1,7 +1,7 @@
 # Natural command → Behavior tree
 
-A typed command becomes a scene-aware command, then a `create_behavior_tree()`
-function, which is checked, judged, repaired until it is right, and drawn. Planning
+A typed command becomes a scene-aware command, then a behavior tree written in XML,
+which is checked, built with py_trees, judged, repaired until it is right, and drawn. Planning
 and execution in the Unity simulator come later; nothing here talks to a robot.
 
 ```
@@ -37,8 +37,8 @@ The API key is read from `OPENAI_API_KEY`, or from
 | Scene | [modules/scene.py](modules/scene.py) | Loads a scene and gives every object a unique id (`transparent_test_tube_1`). Produces both the object list the generator sees and the scene dictionary the enrichment sees. |
 | Command | [modules/command.py](modules/command.py) | The typed command. Isolated so the ASR can replace it later without touching anything else. |
 | Scene-aware command | [modules/enrichment.py](modules/enrichment.py) | The contextual-asr post-processing, using the same five prompt files. Rewrites "the left tube" into the object that is actually there. |
-| Behavior tree | [modules/generator.py](modules/generator.py) | Asks ChatGPT for `create_behavior_tree()` using [prompts/bt_generation_prompt.txt](prompts/bt_generation_prompt.txt). It only translates: it never checks whether the plan is safe or complete. |
-| Syntax check | [modules/tester.py](modules/tester.py) | Checks the generated function statically, then builds it in a sandbox. Nothing physical — only whether the code can run. |
+| Behavior tree | [modules/generator.py](modules/generator.py) | Asks ChatGPT for the tree as an XML document using [prompts/bt_generation_prompt.txt](prompts/bt_generation_prompt.txt). It only translates: it never checks whether the plan is safe or complete. |
+| Syntax check | [modules/tester.py](modules/tester.py), [modules/xml_tree.py](modules/xml_tree.py) | Reads the XML with its line numbers and checks it, then builds it with the py_trees XML parser from the stand-in nodes in [modules/bt_nodes.py](modules/bt_nodes.py). Nothing physical — only whether the tree can be built. |
 | Semantic judge | [modules/judge.py](modules/judge.py) | Fills in the judgement form: accept or reject, which problems there are in its own words, and why. On a rejection that form becomes the generator's feedback. |
 | Generation loop | [modules/loop.py](modules/loop.py), [modules/loop_stage.py](modules/loop_stage.py) | Runs the three above until a tree is accepted or a cap is reached, and keeps every attempt's artifacts apart. |
 | Tree graph | [modules/graph.py](modules/graph.py) | Lays the tree out once and draws it on the canvas, to a PNG and to a `.dot` file. |
@@ -58,15 +58,35 @@ arguments and what each one does follow py_trees 2.x (the signatures were checke
 the installed 2.6.0). Only the four actions (`Place`, `Pour`, `Shake`, `Close`) are not
 from py_trees: they are this project's own stand-ins.
 
-The prompt is the grammar, and the syntax check enforces it. `GRAMMAR_DECORATORS`,
-`GRAMMAR_BEHAVIOURS` and `GRAMMAR_HELPERS` in [config.py](config.py) name the py_trees
-nodes the prompt allows; a decorator or behaviour that py_trees has but the prompt does
-not name, such as `Inverter` or `SetBlackboardVariable`, is refused as "not allowed"
-before the tree is built. [modules/tester.py](modules/tester.py) knows how to check every
-py_trees decorator, condition and blackboard behaviour (`DECORATOR_SIGNATURES`,
-`BEHAVIOUR_SIGNATURES`), so widening the grammar is two edits: add the node to the prompt
-and to the config. If you change one and not the other, the syntax check and the prompt
+The prompt is the grammar, and the syntax check enforces it. `GRAMMAR_DECORATORS` in
+[config.py](config.py) names the py_trees decorators the prompt allows; a tag the prompt
+does not name, such as `OneShot`, `Parallel` or `SubTree`, is refused as "not allowed"
+before the tree is built - even though the py_trees XML parser would build it.
+[modules/xml_tree.py](modules/xml_tree.py) knows how to check every decorator it lists in
+`DECORATORS`, so widening the grammar is two edits: add the decorator to the prompt and
+to the config. If you change one and not the other, the syntax check and the prompt
 disagree.
+
+### The trees are XML, built by py_trees
+
+The generator writes the tree in the BehaviorTree.CPP XML format, and py_trees 2.6 builds
+it with its XML parser (`py_trees.parsers.behaviour_tree_xml.parse_behaviour_tree_xml`).
+The parser builds `Sequence`, `Selector` and the py_trees decorators from their tag
+names itself. The four actions and the four find/check nodes are this project's own
+classes in [modules/bt_nodes.py](modules/bt_nodes.py), written as py_trees *ports* nodes
+(`py_trees.ports.BehaviourWithPorts`) because the parser only builds leaves of that kind.
+They are passed to the parser as an explicit `node_registry`, so it builds nothing else.
+
+An object argument such as `obj="{rack}"` is an input port: the parser wires it to the
+blackboard key `/rack`, the same key a `FindOne` with `key="rack"` stores under and a
+`ForEach` with `target_key="rack"` writes. Every other attribute is a constructor
+argument, converted to the type the class annotates (`times="2"` becomes `2`).
+
+The parser accepts more than the prompt allows and its messages have no line numbers, so
+[modules/xml_tree.py](modules/xml_tree.py) checks the document first and only a tree that
+passes is handed to the parser. The parser also prefixes every node name with its
+parents' names (`Root.ForEachFlask.PlaceFlask`); the built nodes are renamed back to the
+names in the XML, which the check keeps unique.
 
 ## Generic trees
 
@@ -77,26 +97,26 @@ names one. Instead the tree describes the objects it needs by what the robot per
 [prompts/perception.txt](prompts/perception.txt)), finds them while it runs, and the
 rest of the tree refers to them through the py_trees blackboard:
 
-```python
-find_1 = FindOne(name="FindRack", key="rack", type="box", color="blue")
-find_2 = FindAll(name="FindFlasks", key="flasks", type="measuring cylinder")
-place_1 = Place(name="PlaceFlask", obj="@flask", location="@rack")
-for_1 = py_trees.decorators.ForEach(name="ForEachFlask", child=place_1,
-                                    source_key="flasks", target_key="flask")
+```xml
+<FindOne name="FindRack" key="rack" type="box" color="blue"/>
+<FindAll name="FindFlasks" key="flasks" type="measuring cylinder"/>
+<ForEach name="ForEachFlask" source_key="flasks" target_key="flask">
+  <Place name="PlaceFlask" obj="{flask}" location="{rack}"/>
+</ForEach>
 ```
 
 - `FindOne(name, key, <properties>, position, nth)` stores one object under `key`.
   `position` (`leftmost`, `rightmost`, `nearest`, `farthest`) and `nth` pick among
-  several, so "the second box from the left" is `position="leftmost", nth=2`.
+  several, so "the second box from the left" is `position="leftmost" nth="2"`.
 - `FindAll(name, key, <properties>, limit, position)` stores a list, which
-  `py_trees.decorators.ForEach` loops over.
+  a `ForEach` loops over.
 - `HasProperty(name, obj, property, value)` is a condition: it checks an object while
   the tree runs, for "if …, otherwise …" commands.
 - `HasCount(name, key, count, comparison)` is a condition on a `FindAll` list: it
   succeeds when the list holds `count` objects. `comparison` is `"exactly"` (the
   default), `"at least"` or `"at most"` (`HAS_COUNT_COMPARISONS`). `key` is the plain
-  key of a `FindAll`, never an `@` reference, a `FindOne` key or a `ForEach` target.
-- `py_trees.decorators.Inverter` means "not" and may only wrap `HasProperty` or
+  key of a `FindAll`, never a `{key}` reference, a `FindOne` key or a `ForEach` target.
+- `Inverter` means "not" and may only wrap `HasProperty` or
   `HasCount`. A choice is a `Selector` with one branch per case, each starting with its
   condition; "otherwise" is the condition again inside an `Inverter`, and a choice with
   no "otherwise" ends in a branch made only of inverted conditions. `Success` is no
@@ -104,13 +124,16 @@ for_1 = py_trees.decorators.ForEach(name="ForEachFlask", child=place_1,
 - Find nodes can stand anywhere: inside a branch, inside a `ForEach`, or after an
   action, so an object is found right before it is used. A key must only be stored
   before it is used, in the order the tree runs.
-- Every object argument is `"@key"`; a key is a plain name.
+- Every object argument is `"{key}"`; a key that is stored or looped over is a plain
+  name.
 
 The property vocabulary is also in [config.py](config.py) (`PERCEPTION_TYPES`,
 `PERCEPTION_COLOR_PROPERTIES`, `PERCEPTION_BOOLEAN_PROPERTIES`, `FIND_POSITIONS`,
 `HAS_COUNT_COMPARISONS`) for the syntax check; tests make sure they agree with the
-prompts. The find and check nodes are inert
-stand-ins in the sandbox, like the actions: the real ones come with the executor.
+prompts. The find and check nodes are inert stand-ins in
+[modules/bt_nodes.py](modules/bt_nodes.py), like the actions: the executor replaces their
+`update()` bodies, and keeps their constructors and ports, which the XML is written
+against.
 
 The judge judges generic trees too. Unlike the generator it is shown the scene's objects,
 so it can work out what each find node finds on this table, and it is asked whether the
@@ -238,25 +261,23 @@ feedback goes into the **user message**, which grows from one line to four secti
 ```
 COMMAND: shake the left test tube 3 times
 PREVIOUS TREE:
-def create_behavior_tree():
-    try:
-        root = py_trees.composites.Sequence(name="Root", memory=True)
-        shake_1 = Shake(name="ShakeTransparentTestTube1", obj="transparent_test_tube_1", times=3)
-
-        root.add_children([shake_1])
-
-        return root
-    except Exception as e:
-        logging.error(f"Error in create_behavior_tree: {e}")
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="Root" memory="true">
+      <FindOne name="FindLeftTube" key="tube" type="test tube" position="leftmost"/>
+      <Shake name="ShakeLeftTube" obj="{tube}" times="3"/>
+    </Sequence>
+  </BehaviorTree>
+</root>
 REVIEWER FINDINGS:
 Problems: Shake runs while the tube is open.
-Reason: ShakeTransparentTestTube1 shakes transparent_test_tube_1 while it is open and holds liquid, so the liquid will spill; it must be closed with a cap first.
+Reason: ShakeLeftTube shakes the tube stored under tube while it is open and holds liquid, so the liquid will spill; it must be closed with a test tube cap first.
 ```
 
 | Part | Where it comes from |
 |---|---|
 | `COMMAND:` | the same every attempt — the enriched command, or the typed one |
-| `PREVIOUS TREE:` | the exact code of the tree that was sent back |
+| `PREVIOUS TREE:` | the exact XML of the tree that was sent back |
 | `Problems:` | the judge's `errors` phrases, verbatim |
 | `Reason:` | the judge's explanation, verbatim |
 
@@ -265,11 +286,11 @@ the analysis, the JSON, or the judge's prompt.
 
 A failed syntax check uses the same shape, with `SYNTAX CHECK ERRORS:` in place of
 `REVIEWER FINDINGS:` and each blocking check listed with its line number. A reply that
-held no code at all has no tree to send back, so it gets the demand alone:
+held no XML tree at all has no tree to send back, so it gets the demand alone:
 
 ```
 COMMAND: shake the left test tube 3 times
-Your reply contained no create_behavior_tree() code block. Return the tree.
+Your reply contained no ```xml block with the tree. Return the tree.
 ```
 
 **Only the last tree is sent.** On the third attempt the generator sees the second
@@ -283,7 +304,7 @@ All in [config.py](config.py), counted per run:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `SYNTAX_FAILURE_LIMIT` | 3 | The run ends at the 3rd tree the syntax check rejects. A reply holding no code counts as one. |
+| `SYNTAX_FAILURE_LIMIT` | 3 | The run ends at the 3rd tree the syntax check rejects. A reply holding no tree counts as one. |
 | `JUDGE_REJECTION_LIMIT` | 3 | The run ends at the 3rd rejected tree, so the judge sees at most three. From the study design. |
 | `JUDGE_FORMAT_RETRIES` | 2 | Extra judge calls when a reply is not a valid form. |
 
@@ -326,31 +347,26 @@ next to it.
 
 ## What the syntax check checks
 
-It is a *static* test. The only thing executed is the construction of the tree itself,
-with the four actions and the find and check nodes replaced by inert stand-ins — which is the only way to prove the
-function really returns a tree. The decorators, composites and behaviours are the real
-py_trees ones, and they remember the arguments they were built with so the tree can be
-described afterwards.
+It is a *static* test. The document is read with its line numbers and checked; only a
+tree that passes every error check is handed to the py_trees XML parser, which builds it
+from the inert stand-ins in [modules/bt_nodes.py](modules/bt_nodes.py) - the only way to
+prove the document really is a tree. The built nodes keep their XML name and an
+`arguments` dict, so the graph and the judge outline describe them as before.
 
 | Group | Checks |
 |---|---|
-| Syntax | the code parses; there is exactly one `create_behavior_tree`; nothing else at top level |
-| Structure | the body is one `try/except` with the mandated `logging.error` line; the root is a `Sequence` named `Root`; every composite has `memory=True`; only the nodes the prompt allows are used (the four actions, `Sequence`, `Selector` and the py_trees nodes in `GRAMMAR_DECORATORS`, `GRAMMAR_BEHAVIOURS` and `GRAMMAR_HELPERS`); node names and variables are unique; no orphaned node, no node with two parents (a decorator's `child=` counts as its parent), no child that was never created; an `Inverter` wraps only a condition (`HasProperty` or `HasCount`) |
-| Arguments | every action, decorator and behaviour gets exactly its own keyword arguments; counts (`Shake(times=…)`, `Retry(num_failures=…)`, `Repeat(num_success=…)`) are integer literals; every node has a literal name |
-| Objects | find nodes use only the properties and values in `PERCEPTION_*` (`type` from the closed list, colours lowercase, the rest `True`/`False`); `position` is one of `FIND_POSITIONS`; `nth` and `limit` are positive integers; every key is a plain name stored once; every object argument is an `"@key"` stored by a find node that runs earlier, or the `target_key` of a `ForEach` it sits inside; a `FindAll` list is only looped over or counted, and a `FindOne` object is never looped over; `HasCount` names the plain key of a `FindAll`, its `count` is an integer of 0 or more and its `comparison` one of `HAS_COUNT_COMPARISONS`; find nodes may stand anywhere, as long as each key is stored before it is used |
-| Build | the function loads, constructs, and returns a real `py_trees` node with the expected number of nodes |
+| Syntax | the reply is well-formed XML; it is a `<root main_tree_to_execute="MainTree">` holding exactly one `<BehaviorTree ID="MainTree">` with one root node; nothing but tags between the tags (a warning) |
+| Structure | the root is a `Sequence` named `Root`; only the tags the prompt allows are used (the four actions, the four find/check nodes, `Sequence`, `Selector` and the decorators in `GRAMMAR_DECORATORS`); no composite turns `memory` off, and a missing `memory="true"` is a warning (py_trees then uses true); a composite has children, a decorator exactly one, a leaf none; node names are unique across the whole tree; an `Inverter` wraps only a condition (`HasProperty` or `HasCount`) |
+| Arguments | every node gets exactly its own attributes; counts (`times`, `num_failures`, `num_success`) are whole numbers of 1 or more and `duration` a number above 0; every node has a name made of letters and digits (no dots: the parser uses them to join names) |
+| Objects | find nodes use only the properties and values in `PERCEPTION_*` (`type` from the closed list, colours lowercase, the rest `True`/`False`); `position` is one of `FIND_POSITIONS`; `nth` and `limit` are whole numbers of 1 or more; every key is a plain name stored once; every object argument is a `"{key}"` stored by a find node that runs earlier, or the `target_key` of a `ForEach` it sits inside; a `FindAll` list is only looped over or counted, and a `FindOne` object is never looped over; `HasCount` names the plain key of a `FindAll`, its `count` is a whole number of 0 or more and its `comparison` one of `HAS_COUNT_COMPARISONS`; curly braces appear only in object references; find nodes may stand anywhere, as long as each key is stored before it is used |
+| Build | the py_trees XML parser builds the tree, and it holds every node the XML declares |
 
 A failed check marked *warning* is reported but does not stop the run. Only a failed
-*error* check does. When the generated `try/except` swallows the real error, the tester
-runs the body again without it so the message says what actually went wrong.
+*error* check does.
 
 There are **no physical rules here**. "A container holding liquid is closed before it is
-shaken" used to be a check and is now the judge's to make, so a `Shake` without a
-`Close` passes this stage and reaches the judge. The rule is still computed as
-`spill_label()` and written to `analysis_labels.json` per attempt, as an automatic
-label for evaluating the judge later (not for a generic tree, which names no scene
-object) — it is never shown to the generator or the judge,
-and it never changes a status.
+shaken" is the judge's to make, so a `Shake` without a `Close` passes this stage and
+reaches the judge.
 
 ## What a run leaves behind
 
@@ -375,15 +391,13 @@ data/runs/2026-10-15_21-37-30_90bc/
 ├── attempts/
 │   ├── 01/
 │   │   ├── generation/          system_prompt.txt · user_message.txt · raw_reply.txt
-│   │   ├── create_behavior_tree.py
+│   │   ├── tree.xml             the tree the generator wrote
 │   │   ├── tester_report.json   every check with its result and line number
-│   │   ├── analysis_labels.json the automatic labels, for later analysis only
 │   │   ├── judge_outline.txt    the tree exactly as the judge was shown it
 │   │   ├── judge/01/            one folder per judge call
 │   │   └── judge_form.json      the judgement form
 │   └── 02/ …                    the repair, and its own judgement
-├── bt.py                    the accepted tree as a runnable module
-├── create_behavior_tree.py  just the accepted function
+├── bt.xml                   the accepted tree, with a comment saying where it came from
 ├── bt_graph.png             the accepted tree as a picture
 ├── bt_graph.dot             the same graph as DOT source
 └── bt_graph.json            the tree structure, used to redraw a past run
@@ -397,7 +411,7 @@ Global logs live in `data/logs/` — `debug.log`, `info.log` and `error.log`, ro
 daily. `error.log` alone tells you everything that has ever broken.
 
 Any past run can be reopened from the dropdown at the top right of the window, and the
-**Attempt** selector switches the Code, Checks, Judge and Tree graph tabs between that
+**Attempt** selector switches the XML, Checks, Judge and Tree graph tabs between that
 run's attempts.
 
 ## The graph
@@ -445,7 +459,7 @@ prompts/
 │                                {{include: judge_physical_facts.txt}}
 ├── robot_and_workspace.txt      the robot and the axes, shared by both prompts
 ├── actions.txt                  the four actions with object ids (not used on this branch)
-├── generic_actions.txt          the four actions with @ references, shared by both prompts
+├── generic_actions.txt          the four actions with {key} references, shared by both prompts
 ├── perception.txt               what the robot perceives, shared by both prompts
 └── judge_physical_facts.txt     the facts a tree must respect, for the judge only
 ```
@@ -454,7 +468,7 @@ A line `{{include: file.txt}}` is replaced by that file's text when the prompt i
 ([modules/prompt_files.py](modules/prompt_files.py)), so the model receives one continuous
 prompt. The path is relative to the file that contains the line. The robot is
 described once, so the generator and the judge are told the same thing. On this branch
-the actions are not: the generator's refer to objects as `@key`, the judge's still by id. The generator has no physical-facts file on
+both refer to objects as `{key}`. The generator has no physical-facts file on
 purpose: it only translates, and physical rules belong to the judge. The generation
 prompt adds its own sections on the decorators and on building the tree.
 
@@ -478,7 +492,7 @@ dropdown). The effort that was sent is recorded in each run's `summary.json`.
 ## Tests
 
 Ten cases drive the real loop with scripted model replies and the real syntax check —
-acceptance, repair after a rejection, each cap, a reply holding no code, and an invalid
+acceptance, repair after a rejection, each cap, a reply holding no tree, and an invalid
 judgement form:
 
 ```bash
@@ -492,4 +506,4 @@ judgement form:
 ```
 
 `py_trees`, `pydot` and `pytest` were the only additions to the contextual-asr
-environment.
+environment. The XML parser needs `py_trees` 2.6 or later.
