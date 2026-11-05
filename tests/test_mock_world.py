@@ -11,7 +11,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
-from modules.mock_world import MockWorld  # noqa: E402
+from modules.mock_world import INITIAL_ON, MockWorld  # noqa: E402
 from modules.scene import load_scene  # noqa: E402
 from modules.world import WorldObject  # noqa: E402
 
@@ -229,7 +229,7 @@ def test_every_scene_builds(scene_number):
     assert len(world.objects) == len(scene.objects)
     for obj in world.objects:
         assert obj.type in config.PERCEPTION_TYPES, obj.id
-        assert not obj.closed and obj.on is None
+        assert not obj.closed and obj.on == INITIAL_ON.get(scene_number, {}).get(obj.id)
     other = MockWorld.from_scene(scene)
     assert not any(a is b or a.position is b.position
                    for a in world.objects for b in other.objects)
@@ -244,3 +244,102 @@ def test_scene_mapping():
     tubes = MockWorld.from_scene(load_scene('scene8')).perceive({'type': 'test tube'})
     assert len(tubes) == 3
     assert all(t.holds_liquid and t.liquid_color == 'transparent red' for t in tubes)
+
+
+# --- loose colours -----------------------------------------------------------------
+
+@pytest.mark.parametrize('asked, has, expected', [
+    ('red', 'red', True),
+    ('red', 'transparent red', True),
+    ('green', 'dark green', True),
+    ('transparent', 'transparent red', False),
+    ('red', 'infrared', False),
+    ('', '', True),
+    ('', 'red', False),
+    ('RED', 'Transparent Red', True),
+])
+@pytest.mark.parametrize('prop', config.PERCEPTION_COLOR_PROPERTIES)
+def test_colours_match_loosely(prop, asked, has, expected):
+    world = MockWorld([thing('a', 'cube', 0.1, 0.1, **{'color': 'white', prop: has})])
+    obj = world.objects[0]
+    assert world.matches(obj, {prop: asked}) is expected
+    assert ids(world.perceive({prop: asked})) == (['a'] if expected else [])
+
+
+def test_only_colours_match_loosely():
+    world = MockWorld([thing('a', 'test tube cap', 0.1, 0.1)])
+    assert not world.perceive({'type': 'cap'})
+    assert world.perceive({'type': 'test tube cap'})
+    assert not world.perceive({'graspable': 'True'})
+
+
+def test_loose_colours_on_the_real_scenes():
+    tubes = MockWorld.from_scene(load_scene('scene8')).perceive({'liquid_color': 'red'})
+    assert ids(tubes) == [f'transparent_test_tube_{n}' for n in (1, 2, 3)]
+    crates = MockWorld.from_scene(load_scene('scene4')).perceive({'color': 'green'})
+    assert ids(crates) == ['dark_green_crate_1', 'dark_green_crate_2']
+
+
+# --- ties ----------------------------------------------------------------------------
+
+def test_ties_on_the_real_scenes():
+    cubes = MockWorld.from_scene(load_scene('scene3'))
+    assert cubes.perceive({'type': 'cube'}, 'nearest')[0].id == 'green_cube_1'
+    assert cubes.perceive({'type': 'cube'}, 'leftmost')[0].id == 'green_cube_1'
+    cylinders = MockWorld.from_scene(load_scene('scene5'))
+    assert ids(cylinders.perceive({'type': 'measuring cylinder'}, 'nearest')) == [
+        f'transparent_measuring_cylinder_{n}' for n in (1, 2, 3)]
+
+
+@pytest.mark.parametrize('position, expected', [
+    (None, ['d', 'b', 'a', 'c']),
+    ('leftmost', ['d', 'b', 'a', 'c']),
+    ('rightmost', ['a', 'c', 'd', 'b']),
+    ('nearest', ['d', 'a', 'b', 'c']),
+    ('farthest', ['b', 'c', 'd', 'a']),
+])
+def test_every_order_has_a_second_key(position, expected):
+    world = MockWorld([thing('c', 'cube', 0.5, 0.5), thing('a', 'cube', 0.1, 0.5),
+                       thing('b', 'cube', 0.5, 0.0), thing('d', 'cube', 0.1, 0.0)])
+    assert ids(world.perceive({}, position)) == expected
+
+
+# --- objects that start in a holder ---------------------------------------------------
+
+def test_the_scene8_tubes_start_in_the_holder():
+    world = MockWorld.from_scene(load_scene('scene8'))
+    assert all(t.on == 'grey_test_tube_holder' for t in world.perceive({'type': 'test tube'}))
+    assert all(c.on is None for c in world.perceive({'type': 'test tube cap'}))
+
+
+# --- the gaps in the rules --------------------------------------------------------------
+
+def test_pouring_into_itself_is_refused():
+    world = lab()
+    outcome = world.pour(get(world, 'red_tube'), get(world, 'red_tube'))
+    assert not outcome.ok and outcome.reason == 'red_tube cannot be poured into itself'
+    assert get(world, 'red_tube').holds_liquid
+
+
+def test_a_cap_on_a_tube_cannot_be_moved():
+    world = lab()
+    world.close(get(world, 'red_tube'), get(world, 'cap_1'))
+    outcome = world.place(get(world, 'cap_1'), get(world, 'bowl'))
+    assert not outcome.ok
+    assert outcome.reason == 'cap_1 closes red_tube and cannot be moved on its own'
+    assert world.place(get(world, 'cap_2'), get(world, 'bowl')).ok
+
+
+def test_a_fixed_cap_cannot_close():
+    world = MockWorld([thing('tube', 'test tube', 0.1, 0.1),
+                       thing('fixed_cap', 'test tube cap', 0.2, 0.2, graspable=False)])
+    outcome = world.close(get(world, 'tube'), get(world, 'fixed_cap'))
+    assert not outcome.ok and 'fixed_cap is fixed' in outcome.reason
+    assert not get(world, 'tube').closed
+
+
+def test_a_failing_spill_is_the_one_refusal_that_changes_the_table(monkeypatch):
+    monkeypatch.setattr(config, 'MOCK_SPILL_FAILS_ACTION', True)
+    world = lab()
+    assert not world.shake(get(world, 'red_tube'), 1).ok
+    assert get(world, 'red_tube').spilled

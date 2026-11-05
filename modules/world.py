@@ -59,13 +59,18 @@ class World(abc.ABC):
     def perceive(self, properties: dict, position: str | None = None) -> list[WorldObject]:
         """Every object that has all these properties, in order (see the ordering rule).
 
-        The ordering rule, as in prompts/semantic_judge_prompt.txt:
+        The ordering rule, as in prompts/semantic_judge_prompt.txt, with a second key so a
+        tie always has the same answer:
         - without position: scan order, lowest y first, then lowest x;
-        - "leftmost": lowest y first;
-        - "rightmost": highest y first;
-        - "nearest": lowest x first;
-        - "farthest": highest x first.
+        - "leftmost": lowest y first, then lowest x;
+        - "rightmost": highest y first, then lowest x;
+        - "nearest": lowest x first, then lowest y;
+        - "farthest": highest x first, then lowest y.
         """
+
+    @abc.abstractmethod
+    def matches(self, obj: WorldObject, properties: dict) -> bool:
+        """True when obj has all these properties, by the same rule perceive() uses."""
 
     @abc.abstractmethod
     def place(self, obj: WorldObject, location: WorldObject) -> Outcome:
