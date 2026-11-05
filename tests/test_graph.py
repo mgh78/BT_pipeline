@@ -11,28 +11,32 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
-from modules import graph  # noqa: E402
-from modules.tester import SyntaxTestStage  # noqa: E402
-from test_tester import SHAKE, code, every_known_node  # noqa: E402
+from modules import graph, xml_tree  # noqa: E402
+
+TREE = """<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="Root" memory="true">
+      <FindOne name="FindTube" key="tube" type="test tube"/>
+      <FindOne name="FindCap" key="cap" type="test tube cap"/>
+      <Retry name="RetryShake" num_failures="3">
+        <Shake name="ShakeTube" obj="{tube}" times="2"/>
+      </Retry>
+    </Sequence>
+  </BehaviorTree>
+</root>"""
 
 
 @pytest.fixture(scope='module')
 def built():
-    source = code(
-        f'shake_1 = {SHAKE}',
-        'retry_1 = py_trees.decorators.Retry(name="RetryShake", child=shake_1, '
-        'num_failures=3)',
-        'set_1 = py_trees.behaviours.SetBlackboardVariable(name="SetShaken", '
-        'variable_name="shaken", variable_value=True, overwrite=True)',
-        root_children='retry_1, set_1')
-    # The drawing handles every node the tester knows, whatever the prompt allows today.
-    decorators, behaviours, helpers = every_known_node()
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(config, 'GRAMMAR_DECORATORS', decorators)
-        patch.setattr(config, 'GRAMMAR_BEHAVIOURS', behaviours)
-        patch.setattr(config, 'GRAMMAR_HELPERS', helpers)
-        checks, tree, _ = SyntaxTestStage().check(source)
+    import py_trees
+    checks, tree, _ = xml_tree.check_xml(TREE)
     assert not any(check.blocking for check in checks)
+    # The prompt has no py_trees behaviours any more, but the drawing still handles any
+    # py_trees node, so one is added by hand to keep that path tested.
+    extra = py_trees.behaviours.SetBlackboardVariable(
+        name='SetShaken', variable_name='shaken', variable_value=True, overwrite=True)
+    extra.arguments = {'variable_name': 'shaken', 'variable_value': True, 'overwrite': True}
+    tree.add_child(extra)
     return tree
 
 

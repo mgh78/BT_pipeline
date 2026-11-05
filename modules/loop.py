@@ -53,7 +53,7 @@ FINAL_STATUSES = ('accepted', 'no_judge', 'failed_judge_cap', 'failed_syntax_cap
                   'judge_error', 'error')
 
 # Sent back when the generator answered with prose instead of a tree.
-NO_CODE_PROBLEM = ('Your reply contained no create_behavior_tree() code block. '
+NO_CODE_PROBLEM = ('Your reply contained no ```xml block with the tree. '
                    'Return the tree.')
 
 _FENCE = re.compile(r'^```(?:json)?\s*(.*?)\s*```$', re.DOTALL)
@@ -222,11 +222,11 @@ def run_generation_loop(command, original_command, rewritten_command,
         original_command: what the user typed. The judge is always given this.
         rewritten_command: the enriched command, or None.
         generate: ``generate(message, attempt) -> raw reply``.
-        syntax_check: ``syntax_check(code, attempt) -> (passed, tree_or_None, checks)``.
+        syntax_check: ``syntax_check(tree_xml, attempt) -> (passed, tree_or_None, checks)``.
         judge: ``judge(message, attempt, call) -> raw reply``, or None for the
             baseline. With no judge nothing decides whether a tree is right, so the
             first tree that passes the syntax check is the result.
-        extract_code: ``BTGenerator.extract_code``.
+        extract_code: ``BTGenerator.extract_code``, which returns the XML tree.
         clock: time source, for tests.
         on_update: optional ``on_update(record, attempt)`` after every step, so the
             window can follow a run that is still going.

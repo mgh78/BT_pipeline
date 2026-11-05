@@ -15,9 +15,9 @@ import config
 from core import logging_setup
 from core.pipeline import Stage, StageError, StageStatus
 from modules import loop
-from modules.generator import BTGenerator, as_module
+from modules.generator import BTGenerator, as_document
 from modules.judge import SemanticJudge, form_summary
-from modules.tester import SyntaxTestStage, spill_label
+from modules.tester import SyntaxTestStage
 
 # Which run statuses count as a success for the stage's own state.
 SUCCESS = {'accepted', 'no_judge'}
@@ -79,9 +79,9 @@ class GenerationLoopStage(Stage):
             return generator.ask(message, scene, context,
                                  tag=f'{folder}/generation')
 
-        def syntax_check(code, attempt):
+        def syntax_check(tree_xml, attempt):
             folder = attempt_folder(attempt)
-            checks, tree, analysis = tester.check(code)
+            checks, tree, _ = tester.check(tree_xml)
             passed = tester.passed(checks)
             # Kept for the window, which lets you look at any attempt, not only the
             # accepted one.
@@ -89,16 +89,11 @@ class GenerationLoopStage(Stage):
             attempt['tree'] = tree
 
             artifacts[f'attempt {attempt["n"]} tree'] = context.write_text(
-                f'{folder}/create_behavior_tree.py', code + '\n')
+                f'{folder}/tree.xml', tree_xml + '\n')
             context.write_json(f'{folder}/tester_report.json', {
                 'passed': passed,
                 'checks': [check.as_dict() for check in checks],
             })
-            # An automatic label for later analysis only. It is never shown to the
-            # generator or the judge and never changes a status.
-            label = spill_label(analysis, scene)
-            if label is not None:
-                context.write_json(f'{folder}/analysis_labels.json', label)
             return passed, tree, checks
 
         def ask_judge(message, attempt, call):
@@ -158,9 +153,7 @@ class GenerationLoopStage(Stage):
             payload['code'] = last['code']
             payload['answer'] = last['generator_reply']
             artifacts['behavior tree'] = context.write_text(
-                'bt.py', as_module(last['code'], payload))
-            artifacts['function only'] = context.write_text(
-                'create_behavior_tree.py', last['code'] + '\n')
+                'bt.xml', as_document(last['code'], payload))
 
         # What the window shows when no attempt is selected: the last tree that was
         # written, and the checks it got.

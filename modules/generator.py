@@ -10,16 +10,12 @@ So a tree that shakes an open test tube because the user never mentioned a cap i
 intended behaviour now, not a bug.
 """
 
-import re
-
 import config
 from core import logging_setup
-from modules import llm
+from modules import llm, xml_tree
 from modules.prompt_files import load_prompt
 
 log = logging_setup.get_logger('generator')
-
-CODE_BLOCK_PATTERN = re.compile(r'```(?:python)?\s*(.*?)```', re.DOTALL)
 
 
 class BTGenerator:
@@ -40,8 +36,8 @@ class BTGenerator:
 
         The generic prompt has none: the generator is not told what is on the table.
 
-        Filled with ``str.replace``: the prompt contains the literal ``{e}`` of the
-        except block, so ``str.format`` would break it.
+        Filled with ``str.replace``: the prompt contains literal ``{key}`` references,
+        so ``str.format`` would break it.
         """
         path = config.BT_GENERATION_PROMPT_FILE
         prompt = load_prompt(path)
@@ -49,18 +45,12 @@ class BTGenerator:
 
     @staticmethod
     def extract_code(answer):
-        """Return the code in the reply, or None when the reply is not code.
+        """Return the XML tree in the reply, or None when the reply holds no tree.
 
-        None means the generator asked a question instead; the loop reads that with
-        ``loop.parse_generator_reply``.
+        Keeps its old name, so the loop and its tests need no change; the generator now
+        writes XML, read by ``xml_tree.extract_xml``.
         """
-        match = CODE_BLOCK_PATTERN.search(answer)
-        if match:
-            return match.group(1).strip()
-        # A model that forgets the fence but still returns the function.
-        if 'def create_behavior_tree' in answer:
-            return answer.strip()
-        return None
+        return xml_tree.extract_xml(answer)
 
     def ask(self, message, scene, context=None, tag='generation'):
         """Send one generator call and return its raw reply."""
@@ -86,21 +76,19 @@ class BTGenerator:
                 'scene_image': config.BT_GENERATION_SEND_SCENE_IMAGE}
 
 
-def as_module(code, payload):
-    """Wrap a generated function in a runnable module, for the record.
+def as_document(tree_xml, payload):
+    """An accepted XML tree with a comment saying where it came from, for the record.
 
-    The imports name the action, find and check nodes the simulator will provide later;
-    nothing in the pipeline imports this file, it is saved so an accepted tree can be read
-    and run on its own once the executor exists.
+    The file is a complete XML document that ``py_trees.parsers.behaviour_tree_xml``
+    reads as it is, with the node classes of ``modules/bt_nodes.py`` registered.
     """
-    header = (
-        f'# Scene:    {payload.get("scene")}\n'
-        f'# Command:  {payload.get("command")}\n'
-        f'# Enriched: {payload.get("enriched_command") or "-"}\n'
-        f'# Model:    {payload.get("generation_model") or config.BT_GENERATION_MODEL}\n\n'
-        'import logging\n\n'
-        'import py_trees\n\n'
-        '# The action, find and check nodes are provided by the simulator side.\n'
-        'from bt_nodes import Place, Pour, Shake, Close, FindOne, FindAll, HasProperty, '
-        'HasCount\n\n\n')
-    return header + code + '\n'
+    def safe(text):         # "--" may not appear inside an XML comment
+        return str(text or '-').replace('--', '- -')
+
+    header = ('<!--\n'
+              f'  Scene:    {safe(payload.get("scene"))}\n'
+              f'  Command:  {safe(payload.get("command"))}\n'
+              f'  Enriched: {safe(payload.get("enriched_command"))}\n'
+              f'  Model:    {safe(payload.get("generation_model") or config.BT_GENERATION_MODEL)}\n'
+              '-->\n')
+    return header + tree_xml + '\n'

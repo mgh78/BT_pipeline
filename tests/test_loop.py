@@ -27,36 +27,30 @@ from modules.scene import SceneStage  # noqa: E402
 SCENE = 'scene8'
 COMMAND = 'shake the test tube two times'
 
-FIND_TUBE = 'FindOne(name="FindTube", key="tube", type="test tube")'
-FIND_CAP = 'FindOne(name="FindCap", key="cap", type="test tube cap")'
+FIND_TUBE = '<FindOne name="FindTube" key="tube" type="test tube"/>'
+FIND_CAP = '<FindOne name="FindCap" key="cap" type="test tube cap"/>'
 
 
 def tree(*actions):
-    """A fenced create_behavior_tree() holding the given action lines.
+    """A fenced XML tree holding the given action elements.
 
-    It starts by finding the tube and its cap, which the actions refer to as @tube and @cap.
+    It starts by finding the tube and its cap, which the actions refer to as {tube} and {cap}.
     """
-    names = [line.split('name="')[1].split('"')[0] for line in actions]
-    actions = (FIND_TUBE, FIND_CAP, *actions)
-    variables = [f'node_{i}' for i, _ in enumerate(actions, start=1)]
-    body = '\n'.join(f'        {variable} = {action}'
-                     for variable, action in zip(variables, actions))
-    return ('```python\n'
-            'def create_behavior_tree():\n'
-            '    try:\n'
-            '        root = py_trees.composites.Sequence(name="Root", memory=True)\n'
+    body = '\n'.join(f'      {node}' for node in (FIND_TUBE, FIND_CAP, *actions))
+    return ('```xml\n'
+            '<root main_tree_to_execute="MainTree">\n'
+            '  <BehaviorTree ID="MainTree">\n'
+            '    <Sequence name="Root" memory="true">\n'
             f'{body}\n'
-            f'        root.add_children([{", ".join(variables)}])\n'
-            '\n'
-            '        return root\n'
-            '    except Exception as e:\n'
-            '        logging.error(f"Error in create_behavior_tree: {e}")\n'
-            '```') if names else None
+            '    </Sequence>\n'
+            '  </BehaviorTree>\n'
+            '</root>\n'
+            '```')
 
 
-CLOSE = 'Close(name="CloseTube", obj="@tube", closing_obj="@cap")'
-SHAKE = 'Shake(name="ShakeTube", obj="@tube", times=2)'
-SHAKE_UNKNOWN = 'Shake(name="ShakeTube", obj="@flask", times=2)'
+CLOSE = '<Close name="CloseTube" obj="{tube}" closing_obj="{cap}"/>'
+SHAKE = '<Shake name="ShakeTube" obj="{tube}" times="2"/>'
+SHAKE_UNKNOWN = '<Shake name="ShakeTube" obj="{flask}" times="2"/>'
 
 GOOD_TREE = tree(CLOSE, SHAKE)
 TREE_WITHOUT_CLOSE = tree(SHAKE)
@@ -175,7 +169,7 @@ def test_reply_without_code_is_sent_back(run):
     assert record['attempts'][0]['kind'] == 'no_code'
 
     second = scripted.messages('generator')[1]
-    assert 'no create_behavior_tree() code block' in second
+    assert 'no ```xml block with the tree' in second
     # There was no tree to send back, only the demand for one.
     assert 'PREVIOUS TREE:' not in second
 
@@ -252,13 +246,13 @@ def test_every_attempt_keeps_its_own_folder(run):
     _, _, context = run([TREE_WITHOUT_CLOSE, GOOD_TREE], [REJECT, ACCEPT])
     for number in ('01', '02'):
         folder = context.directory / 'attempts' / number
-        assert (folder / 'create_behavior_tree.py').exists()
+        assert (folder / 'tree.xml').exists()
         assert (folder / 'tester_report.json').exists()
         assert (folder / 'judge_form.json').exists()
     saved = json.loads((context.directory / 'attempts/01/judge_form.json').read_text())
     assert saved['analysis'] == ANALYSIS
-    first = (context.directory / 'attempts/01/create_behavior_tree.py').read_text()
-    second = (context.directory / 'attempts/02/create_behavior_tree.py').read_text()
+    first = (context.directory / 'attempts/01/tree.xml').read_text()
+    second = (context.directory / 'attempts/02/tree.xml').read_text()
     assert 'Close' not in first and 'Close' in second
 
 
