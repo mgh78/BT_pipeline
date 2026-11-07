@@ -48,7 +48,19 @@ LEGEND = (
     ('behaviour', 'Condition / blackboard',
      'checks or sets a blackboard value, or always succeeds or fails'),
 )
+# The blackboard notation in the node arguments, listed under the node types when the tree
+# uses it: (kind, label, the lines that explain it).
+NOTATION = (
+    ('braces', '{key}',
+     ('the object stored under that key on the blackboard, e.g. obj = {object}',)),
+    ('plain', 'plain key',
+     ('the name of a blackboard entry: where a find node or ForEach stores',
+      "(key, target_key), or which list it reads (source_key, HasCount's key)")),
+)
+PLAIN_KEY_ARGUMENTS = ('key', 'source_key', 'target_key')
 LEGEND_TITLE_HEIGHT = 22
+NOTATION_GAP = 6               # between the node types and the notation
+NOTATION_LINE_HEIGHT = 18
 LEGEND_ROW_HEIGHT = 26
 LEGEND_GAP = 16                # between the tree and its legend
 SWATCH_WIDTH = 36
@@ -126,6 +138,25 @@ class LegendRow:
 
 
 @dataclass
+class NotationRow:
+    """One notation entry of the legend: no swatch, its label and the lines that explain it."""
+
+    kind: str
+    label: str
+    lines: list
+    y: float                       # top of the first line
+    label_x: float
+    description_x: float
+
+    def line_middles(self):
+        """The vertical middle of each line, for drawing it with a left-middle anchor."""
+        return [self.y + (index + 0.5) * NOTATION_LINE_HEIGHT for index in range(len(self.lines))]
+
+    def as_dict(self):
+        return {'kind': self.kind, 'label': self.label, 'lines': list(self.lines)}
+
+
+@dataclass
 class GraphLayout:
     """A laid-out tree: the root box plus the size of the drawing around it.
 
@@ -138,6 +169,7 @@ class GraphLayout:
     height: float
     legend: list = field(default_factory=list)
     legend_title_y: float = 0.0
+    notation: list = field(default_factory=list)
 
     @property
     def nodes(self):
@@ -217,8 +249,32 @@ def from_dict(payload, prefix='n'):
     return convert(payload)
 
 
-def layout(root):
-    """Place every node: parents centred over their children, siblings left to right."""
+def notation_for(root):
+    """The NOTATION entries this tree uses: {key} when an argument holds a brace, the
+    plain key when a node stores or reads a key by name."""
+    nodes = list(root.walk())
+    used = set()
+    if any('{' in str(value) for node in nodes for value in node.arguments.values()):
+        used.add('braces')
+    if any(name in node.arguments for node in nodes for name in PLAIN_KEY_ARGUMENTS):
+        used.add('plain')
+    return [entry for entry in NOTATION if entry[0] in used]
+
+
+def notation_from_json(payload):
+    """The notation saved in bt_graph.json, or None for a file written before it existed."""
+    saved = payload.get('notation')
+    if saved is None:
+        return None
+    return [(entry['kind'], entry['label'], tuple(entry['lines'])) for entry in saved]
+
+
+def layout(root, notation=None):
+    """Place every node: parents centred over their children, siblings left to right.
+
+    ``notation`` is the list of NOTATION entries to explain under the node types; None
+    works it out from the tree.
+    """
 
     def measure(node):
         title = len(node.label) + (2 if node.marker else 0)
@@ -261,22 +317,34 @@ def layout(root):
     rows, legend_width = [], 0.0
     top = legend_title_y + LEGEND_TITLE_HEIGHT
     entries = [entry for entry in LEGEND if entry[0] in kinds]
+    notation = notation_for(root) if notation is None else notation
     name_x = MARGIN + SWATCH_WIDTH + SWATCH_TEXT_GAP
     # One column for the meanings, so they line up whatever the names' lengths.
-    description_x = name_x + max((len(name) for _, name, _ in entries),
-                                 default=0) * TITLE_CHAR_WIDTH + SWATCH_TEXT_GAP
+    description_x = name_x + max(
+        [len(name) * TITLE_CHAR_WIDTH for _, name, _ in entries]
+        + [len(label) * ARGUMENT_CHAR_WIDTH for _, label, _ in notation],
+        default=0) + SWATCH_TEXT_GAP
     for kind, name, description in entries:
         rows.append(LegendRow(kind, name, description, MARGIN, top, name_x, description_x))
         legend_width = max(legend_width,
                            description_x + len(description) * ARGUMENT_CHAR_WIDTH + MARGIN)
         top += LEGEND_ROW_HEIGHT
 
+    notation_rows = []
+    if notation:
+        top += NOTATION_GAP
+    for kind, label, lines in notation:
+        notation_rows.append(NotationRow(kind, label, list(lines), top, name_x, description_x))
+        legend_width = max([legend_width] + [
+            description_x + len(line) * ARGUMENT_CHAR_WIDTH + MARGIN for line in lines])
+        top += NOTATION_LINE_HEIGHT * len(lines)
+
     width = max(tree_width, legend_width)
     for node in root.walk():           # centre the tree when the legend is the wider one
         node.x += (width - tree_width) / 2
     height = top + MARGIN / 2
     return GraphLayout(root=root, width=width, height=height, legend=rows,
-                       legend_title_y=legend_title_y)
+                       legend_title_y=legend_title_y, notation=notation_rows)
 
 
 # --- Pillow rendering ---------------------------------------------------------
@@ -367,6 +435,13 @@ def _draw_legend(draw, graph_layout, colors, scale, title_font, argument_font):
                   fill=colors['text'], anchor='lm')
         draw.text((row.description_x * scale, middle), row.description,
                   font=argument_font, fill=colors['subtext'], anchor='lm')
+    for row in graph_layout.notation:
+        middles = row.line_middles()
+        draw.text((row.label_x * scale, middles[0] * scale), row.label, font=argument_font,
+                  fill=colors['text'], anchor='lm')
+        for line, middle in zip(row.lines, middles):
+            draw.text((row.description_x * scale, middle * scale), line, font=argument_font,
+                      fill=colors['subtext'], anchor='lm')
 
 
 # --- DOT and graphviz ---------------------------------------------------------
@@ -480,7 +555,8 @@ class TreeGraphStage(Stage):
                       counts['nodes'], counts['actions'], counts['depth'], png_path.name)
 
         artifacts['tree structure'] = context.write_json(
-            'bt_graph.json', {'counts': counts, 'tree': graph_layout.root.as_dict()})
+            'bt_graph.json', {'counts': counts, 'tree': graph_layout.root.as_dict(),
+                              'notation': [row.as_dict() for row in graph_layout.notation]})
 
         detail = dict(counts)
         if config.GRAPH_EXPORT_DOT:

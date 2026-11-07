@@ -82,7 +82,8 @@ class GraphView(customtkinter.CTkFrame):
     def show_from_json(self, payload, image_path=None):
         """Draw a tree stored in bt_graph.json, for a run that has already finished."""
         root = graph_module.from_dict(payload['tree'])
-        self.show(graph_module.layout(root), image_path)
+        notation = graph_module.notation_from_json(payload)   # None in an older file
+        self.show(graph_module.layout(root, notation), image_path)
 
     def clear(self, message='Generate a tree to see it here.'):
         self.layout = None
@@ -229,3 +230,12 @@ class GraphView(customtkinter.CTkFrame):
             self.canvas.create_text(row.description_x * scale, middle, text=row.description,
                                     anchor='w', fill=colors['subtext'],
                                     font=('Arial', argument_size))
+        for row in self.layout.notation:
+            middles = row.line_middles()
+            self.canvas.create_text(row.label_x * scale, middles[0] * scale, text=row.label,
+                                    anchor='w', fill=colors['text'],
+                                    font=('Arial', argument_size))
+            for line, middle in zip(row.lines, middles):
+                self.canvas.create_text(row.description_x * scale, middle * scale, text=line,
+                                        anchor='w', fill=colors['subtext'],
+                                        font=('Arial', argument_size))

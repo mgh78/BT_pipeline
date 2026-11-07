@@ -128,3 +128,78 @@ def test_a_find_node_is_drawn_in_its_own_colour(built, tmp_path):
     assert config.GRAPH_COLORS['perception_border'] in graph.to_dot(layout)
     find_tube = graph.from_py_trees(built).children[0]
     assert find_tube.argument_lines == ['FindOne', 'key = tube', 'type = test tube']
+
+
+# --- the blackboard notation ------------------------------------------------------
+
+def layout_of(*nodes):
+    body = '\n'.join(f'      {node}' for node in nodes)
+    text = ('<root main_tree_to_execute="MainTree">\n  <BehaviorTree ID="MainTree">\n'
+            f'    <Sequence name="Root" memory="true">\n{body}\n    </Sequence>\n'
+            '  </BehaviorTree>\n</root>\n')
+    checks, tree, _ = xml_tree.check_xml(text)
+    assert not any(check.blocking for check in checks)
+    return graph.layout(graph.from_py_trees(tree))
+
+
+FIND_ALL = '<FindAll name="FindEveryObject" key="objects" graspable="True"/>'
+FOR_EACH = ('<ForEach name="ForEachObject" source_key="objects" target_key="object">'
+            '<Shake name="ShakeObject" obj="{object}" times="1"/></ForEach>')
+
+
+def test_a_tree_with_braces_and_plain_keys_explains_both():
+    layout = layout_of(FIND_ALL, FOR_EACH)
+    assert [row.label for row in layout.notation] == ['{key}', 'plain key']
+    assert layout.notation[0].lines == [
+        'the object stored under that key on the blackboard, e.g. obj = {object}']
+    assert len(layout.notation[1].lines) == 2
+
+
+def test_a_tree_without_braces_gets_no_brace_line():
+    layout = layout_of(FIND_ALL, '<HasCount name="CountObjects" key="objects" count="2"/>')
+    assert [row.kind for row in layout.notation] == ['plain']
+
+
+def test_the_notation_sits_under_the_node_types_in_the_meanings_column():
+    layout = layout_of(FIND_ALL, FOR_EACH)
+    last_type = max(row.y for row in layout.legend)
+    assert all(row.y > last_type + graph.SWATCH_HEIGHT for row in layout.notation)
+    columns = {row.description_x for row in layout.legend + layout.notation}
+    assert len(columns) == 1
+    assert all(row.label_x == layout.legend[0].name_x for row in layout.notation)
+    bottom = layout.notation[-1].y + graph.NOTATION_LINE_HEIGHT * len(layout.notation[-1].lines)
+    assert bottom < layout.height
+
+
+def test_the_legend_grows_by_the_notation_lines():
+    root = layout_of(FIND_ALL, FOR_EACH).root
+    without = graph.layout(graph.from_dict(root.as_dict()), notation=[])
+    with_both = graph.layout(graph.from_dict(root.as_dict()))
+    assert with_both.height - without.height == pytest.approx(
+        graph.NOTATION_GAP + 3 * graph.NOTATION_LINE_HEIGHT)
+    assert with_both.width >= without.width
+
+
+def test_the_json_round_trip_keeps_the_notation():
+    import json
+    layout = layout_of(FIND_ALL, FOR_EACH)
+    saved = json.loads(json.dumps({'tree': layout.root.as_dict(),
+                                   'notation': [row.as_dict() for row in layout.notation]}))
+    again = graph.layout(graph.from_dict(saved['tree']), graph.notation_from_json(saved))
+    assert [(r.kind, r.label, r.lines) for r in again.notation] == \
+        [(r.kind, r.label, r.lines) for r in layout.notation]
+
+
+def test_an_older_json_without_notation_still_opens():
+    saved = {'tree': layout_of(FIND_ALL, FOR_EACH).root.as_dict()}
+    assert graph.notation_from_json(saved) is None
+    again = graph.layout(graph.from_dict(saved['tree']), graph.notation_from_json(saved))
+    assert [row.kind for row in again.notation] == ['braces', 'plain']
+
+
+def test_the_png_has_room_for_the_notation(tmp_path):
+    from PIL import Image
+    layout = layout_of(FIND_ALL, FOR_EACH)
+    graph.render_png(layout, tmp_path / 'tree.png', scale=1)
+    with Image.open(tmp_path / 'tree.png') as image:
+        assert image.size == (int(layout.width), int(layout.height))
