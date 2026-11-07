@@ -20,6 +20,7 @@ import config
 from core import logging_setup
 from core.pipeline import Check, Pipeline, StageResult, StageStatus
 from core.run_context import RunContext
+from gui.execution_view import ExecutionView
 from gui.graph_view import GraphView
 from gui.log_view import LogView
 from gui.stage_panel import CheckTable, StagePanel, open_path
@@ -121,6 +122,7 @@ class App(customtkinter.CTk):
         self._attempts = []        # the attempts of the run on screen
         self._payload_png = None   # the saved image of the accepted tree
         self._judged = True        # False when the run on screen was a baseline
+        self._run_scene = None     # the scene of the run on screen, for the Execution tab
 
         self.grid_columnconfigure(0, weight=0, minsize=420)
         self.grid_columnconfigure(1, weight=3, minsize=480)
@@ -285,7 +287,7 @@ class App(customtkinter.CTk):
 
         self.tabs = customtkinter.CTkTabview(column, corner_radius=8)
         self.tabs.grid(row=1, column=0, sticky='nsew')
-        for name in ('Tree graph', 'XML', 'Checks', 'Judge'):
+        for name in ('Tree graph', 'XML', 'Checks', 'Judge', 'Execution'):
             self.tabs.add(name)
             self.tabs.tab(name).grid_columnconfigure(0, weight=1)
             self.tabs.tab(name).grid_rowconfigure(0, weight=1)
@@ -308,6 +310,10 @@ class App(customtkinter.CTk):
             self.tabs.tab('Judge'), wrap='word', font=MONOSPACE)
         self.judge_box.grid(row=0, column=0, sticky='nsew', padx=8, pady=8)
         self.judge_box.configure(state='disabled')
+
+        self.execution_view = ExecutionView(self.tabs.tab('Execution'),
+                                            on_status=self.status, fg_color='transparent')
+        self.execution_view.grid(row=0, column=0, sticky='nsew')
 
     # --- Running --------------------------------------------------------
 
@@ -363,6 +369,7 @@ class App(customtkinter.CTk):
         self.graph_view.clear('Running…')
         self._set_code('')
         self.check_table.show([])
+        self.execution_view.unavailable('Wait for the pipeline run to finish.')
 
         self.context = RunContext(scene=scene)
         self.payload = {
@@ -435,6 +442,7 @@ class App(customtkinter.CTk):
         self._attempts = list(record.get('attempts', []))
         self._payload_png = payload.get('graph_png')
         self._judged = record.get('status') != 'no_judge'
+        self._run_scene = payload.get('scene')
 
         if not self._attempts:
             self.attempt_menu.configure(values=['—'], state='disabled')
@@ -443,6 +451,7 @@ class App(customtkinter.CTk):
             self.check_table.show([])
             self._set_judge('')
             self.graph_view.clear('No tree was generated.')
+            self.execution_view.set_attempt(None, self._run_scene)
             return
 
         labels = [self._attempt_label(a) for a in self._attempts]
@@ -467,6 +476,7 @@ class App(customtkinter.CTk):
                         if self._attempt_label(a) == label), None)
         if attempt is None:
             return
+        self.execution_view.set_attempt(attempt, self._run_scene)
 
         if attempt['kind'] == 'no_code':
             self._set_code(attempt.get('generator_reply') or '')
@@ -552,6 +562,7 @@ class App(customtkinter.CTk):
         self._attempts = []
         self._payload_png = directory / 'bt_graph.png'
         self._judged = loop_summary.get('status') != 'no_judge'
+        self._run_scene = summary.get('scene')
 
         for entry in stored:
             folder = directory / 'attempts' / f'{entry["n"]:02d}'
@@ -574,6 +585,7 @@ class App(customtkinter.CTk):
             self._set_code('')
             self.check_table.show([])
             self._set_judge('')
+            self.execution_view.set_attempt(None, self._run_scene)
             return
 
         labels = [self._attempt_label(a) for a in self._attempts]
