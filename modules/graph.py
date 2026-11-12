@@ -52,12 +52,16 @@ LEGEND = (
 # uses it: (kind, label, the lines that explain it).
 NOTATION = (
     ('braces', '{key}',
-     ('the object stored under that key on the blackboard, e.g. obj = {object}',)),
+     ('a value read from the blackboard: obj = {object}, source_key = {objects}',)),
     ('plain', 'plain key',
-     ('the name of a blackboard entry: where a find node or ForEach stores',
-      "(key, target_key), or which list it reads (source_key, HasCount's key)")),
+     ('where a find node or ForEach writes: key = objects, target_key = object',
+      "(in the XML, source_key and HasCount's key are written without braces)")),
 )
-PLAIN_KEY_ARGUMENTS = ('key', 'source_key', 'target_key')
+PLAIN_KEY_ARGUMENTS = ('key', 'target_key')
+# Keys a node reads although the XML writes them plain. The drawing shows them in braces,
+# so braces always mean "read from the blackboard"; node.arguments and the XML keep them
+# plain, and the judge reads them that way.
+READ_KEYS = {'ForEach': ('source_key',), 'HasCount': ('key',)}
 LEGEND_TITLE_HEIGHT = 22
 NOTATION_GAP = 6               # between the node types and the notation
 NOTATION_LINE_HEIGHT = 18
@@ -204,6 +208,13 @@ def _is_decorator(node):
     return isinstance(node, py_trees.decorators.Decorator)
 
 
+def shown_arguments(type_name, arguments):
+    """A node's arguments as the drawing shows them: the keys it reads in braces."""
+    read = READ_KEYS.get(type_name, ())
+    return {key: f'{{{value}}}' if key in read and not str(value).startswith('{') else value
+            for key, value in arguments.items()}
+
+
 def from_py_trees(root, prefix='n'):
     """Convert a built py_trees tree into GraphNodes."""
     counter = [0]
@@ -226,7 +237,8 @@ def from_py_trees(root, prefix='n'):
         arguments = {key: value for key, value in
                      (getattr(node, 'arguments', None) or {}).items() if key != 'name'}
         graph_node = GraphNode(id=f'{prefix}{counter[0]}', label=node.name, kind=kind,
-                               arguments={k: str(v) for k, v in arguments.items()},
+                               arguments=shown_arguments(
+                                   type_name, {k: str(v) for k, v in arguments.items()}),
                                type_name=type_name)
         graph_node.children = [convert(child) for child in getattr(node, 'children', [])]
         return graph_node
@@ -240,9 +252,10 @@ def from_dict(payload, prefix='n'):
 
     def convert(entry):
         counter[0] += 1
+        type_name = entry.get('type_name', '')
         node = GraphNode(id=f'{prefix}{counter[0]}', label=entry['label'],
-                         kind=entry['kind'], arguments=entry.get('arguments', {}),
-                         type_name=entry.get('type_name', ''))
+                         kind=entry['kind'], type_name=type_name,
+                         arguments=shown_arguments(type_name, entry.get('arguments', {})))
         node.children = [convert(child) for child in entry.get('children', [])]
         return node
 
@@ -250,13 +263,14 @@ def from_dict(payload, prefix='n'):
 
 
 def notation_for(root):
-    """The NOTATION entries this tree uses: {key} when an argument holds a brace, the
-    plain key when a node stores or reads a key by name."""
+    """The NOTATION entries this tree uses: {key} when an argument is shown in braces,
+    the plain key when a find node or ForEach writes a key."""
     nodes = list(root.walk())
     used = set()
     if any('{' in str(value) for node in nodes for value in node.arguments.values()):
         used.add('braces')
-    if any(name in node.arguments for node in nodes for name in PLAIN_KEY_ARGUMENTS):
+    if any(not str(node.arguments.get(name, '{')).startswith('{')
+           for node in nodes for name in PLAIN_KEY_ARGUMENTS):
         used.add('plain')
     return [entry for entry in NOTATION if entry[0] in used]
 

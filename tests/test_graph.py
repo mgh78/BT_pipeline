@@ -151,13 +151,20 @@ def test_a_tree_with_braces_and_plain_keys_explains_both():
     layout = layout_of(FIND_ALL, FOR_EACH)
     assert [row.label for row in layout.notation] == ['{key}', 'plain key']
     assert layout.notation[0].lines == [
-        'the object stored under that key on the blackboard, e.g. obj = {object}']
-    assert len(layout.notation[1].lines) == 2
+        'a value read from the blackboard: obj = {object}, source_key = {objects}']
+    assert layout.notation[1].lines == [
+        'where a find node or ForEach writes: key = objects, target_key = object',
+        "(in the XML, source_key and HasCount's key are written without braces)"]
 
 
 def test_a_tree_without_braces_gets_no_brace_line():
-    layout = layout_of(FIND_ALL, '<HasCount name="CountObjects" key="objects" count="2"/>')
+    layout = layout_of(FIND_ALL, '<FindOne name="FindBox" key="box" type="box"/>')
     assert [row.kind for row in layout.notation] == ['plain']
+
+
+def test_a_has_count_key_is_read_so_it_gets_the_brace_line():
+    layout = layout_of(FIND_ALL, '<HasCount name="CountObjects" key="objects" count="2"/>')
+    assert [row.kind for row in layout.notation] == ['braces', 'plain']
 
 
 def test_the_notation_sits_under_the_node_types_in_the_meanings_column():
@@ -203,3 +210,58 @@ def test_the_png_has_room_for_the_notation(tmp_path):
     graph.render_png(layout, tmp_path / 'tree.png', scale=1)
     with Image.open(tmp_path / 'tree.png') as image:
         assert image.size == (int(layout.width), int(layout.height))
+
+
+# --- keys a node reads are drawn in braces --------------------------------------------
+
+READS_TREE = (FIND_ALL, FOR_EACH,
+              '<HasCount name="CountObjects" key="objects" count="2" comparison="at least"/>')
+
+
+def drawn(layout):
+    return {node.label: node for node in layout.nodes}
+
+
+def test_read_keys_are_drawn_in_braces_and_written_keys_stay_plain():
+    nodes = drawn(layout_of(*READS_TREE))
+    assert nodes['ForEachObject'].arguments == {'source_key': '{objects}', 'target_key': 'object'}
+    assert nodes['CountObjects'].arguments['key'] == '{objects}'
+    assert nodes['CountObjects'].arguments['comparison'] == 'at least'
+    assert nodes['FindEveryObject'].arguments['key'] == 'objects'
+    assert nodes['ShakeObject'].arguments['obj'] == '{object}'
+    assert 'source_key = {objects}' in nodes['ForEachObject'].argument_lines
+    assert 'key = {objects}' in nodes['CountObjects'].argument_lines
+
+
+def test_the_braces_reach_the_png_dot_and_json(tmp_path):
+    layout = layout_of(*READS_TREE)
+    assert 'source_key = {objects}' in graph.to_dot(layout)
+    saved = layout.root.as_dict()
+    for_each = next(c for c in saved['children'] if c['label'] == 'ForEachObject')
+    assert for_each['arguments']['source_key'] == '{objects}'
+    graph.render_png(layout, tmp_path / 'tree.png')
+
+
+def test_an_older_json_without_braces_is_drawn_with_them():
+    saved = layout_of(*READS_TREE).root.as_dict()
+    for child in saved['children']:
+        if child['label'] == 'ForEachObject':
+            child['arguments']['source_key'] = 'objects'
+    again = graph.from_dict(saved)
+    for_each = next(c for c in again.children if c.label == 'ForEachObject')
+    assert for_each.arguments['source_key'] == '{objects}'
+
+
+def test_the_tree_and_the_judge_outline_keep_the_plain_keys():
+    from modules import loop
+    body = '\n'.join(READS_TREE)
+    text = ('<root main_tree_to_execute="MainTree"><BehaviorTree ID="MainTree">'
+            f'<Sequence name="Root" memory="true">{body}</Sequence></BehaviorTree></root>')
+    _, tree, _ = xml_tree.check_xml(text)
+    graph.layout(graph.from_py_trees(tree))
+    for_each = next(n for n in tree.iterate() if n.name == 'ForEachObject')
+    count = next(n for n in tree.iterate() if n.name == 'CountObjects')
+    assert for_each.arguments['source_key'] == 'objects' and count.arguments['key'] == 'objects'
+    outline = loop.outline_for_judge(tree)
+    assert 'source_key="objects"' in outline and 'key="objects"' in outline
+    assert '{objects}' not in outline
