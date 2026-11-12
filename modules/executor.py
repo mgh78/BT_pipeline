@@ -138,7 +138,7 @@ def format_tick(entry):
     lines.append('World events:')
     for event in entry['events']:
         arguments = ', '.join(f'{name}={value}' for name, value in event['arguments'].items())
-        result = 'ok' if event['ok'] else 'REFUSED'
+        result = 'ok' if event['action_happened'] else 'REFUSED'
         fault = f' [fault: {event["fault"]}]' if event['fault'] else ''
         reason = f': {event["reason"]}' if event['reason'] else ''
         lines.append(f'  {event["action"]}({arguments}) {result}{fault}{reason}')

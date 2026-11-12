@@ -85,7 +85,7 @@ def _tick(entry, previous):
     for event in entry['events']:
         arguments = ', '.join(f'{name}={value}' for name, value in event['arguments'].items())
         text = f'  {event["action"]}({arguments})'
-        if not event['ok']:
+        if not event['action_happened']:
             lines.append((f'{text} REFUSED: {event["reason"]}', 'refused'))
         elif event['fault']:
             lines.append((f'{text} ok, fault {event["fault"]}: {event["reason"]}', 'fault'))

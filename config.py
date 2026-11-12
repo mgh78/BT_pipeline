@@ -120,9 +120,9 @@ JUDGE_FORMAT_RETRIES = 2    # extra judge calls when a reply is not a valid form
 
 # --- Mock world --------------------------------------------------------------
 
-# Shaking an open container that holds liquid spills it. The shake is still carried out
-# and the spill is recorded as a fault; True makes the spill fail the action instead.
-# A question for the supervisor.
+# Shaking an open container that holds liquid spills it. The mock world always reports the
+# shake as carried out, with the fault "spill". This decides what the action node makes of
+# a fault: False, the node succeeds; True, it fails. A question for the supervisor.
 MOCK_SPILL_FAILS_ACTION = False
 
 # --- Running a tree ----------------------------------------------------------

@@ -11,6 +11,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import config  # noqa: E402
 from modules import bt_nodes, xml_tree  # noqa: E402
 from modules.mock_world import MockWorld  # noqa: E402
 from modules.world import WorldObject  # noqa: E402
@@ -203,6 +204,24 @@ def test_pour_fails_with_the_worlds_reason():
                       '<Pour name="PourCube" source="{cube}" target="{box}"/>')
     assert root.status == FAILURE
     assert nodes['PourCube'].feedback_message == 'left_cube holds no liquid'
+
+
+@pytest.mark.parametrize('spill_fails, status', [(False, SUCCESS), (True, FAILURE)])
+def test_the_shake_node_decides_what_a_spill_means(monkeypatch, spill_fails, status):
+    monkeypatch.setattr(config, 'MOCK_SPILL_FAILS_ACTION', spill_fails)
+    world = table()
+    root, nodes = run(world, FIND_TUBE, '<Shake name="ShakeTube" obj="{tube}" times="2"/>')
+    assert root.status == status and nodes['ShakeTube'].status == status
+    assert nodes['ShakeTube'].feedback_message == 'tube was shaken while open and spilled'
+    assert world.perceive({'type': 'test tube'})[0].spilled
+    assert world.snapshot()['faults'][0]['fault'] == 'spill'
+
+
+def test_the_setting_does_not_touch_an_action_without_a_fault(monkeypatch):
+    monkeypatch.setattr(config, 'MOCK_SPILL_FAILS_ACTION', True)
+    root, _ = run(table(), FIND_CUBE, FIND_BOX,
+                  '<Place name="PlaceCube" obj="{cube}" location="{box}"/>')
+    assert root.status == SUCCESS
 
 
 def test_shake_carried_out_with_a_spill_succeeds_and_says_so():

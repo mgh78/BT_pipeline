@@ -93,7 +93,7 @@ def test_marked_splits_the_objects():
 def test_place_into_a_box():
     world = packages()
     outcome = world.place(get(world, 'red_cube'), get(world, 'blue_box'))
-    assert outcome.ok and not outcome.fault
+    assert outcome.action_happened and not outcome.fault
     cube = get(world, 'red_cube')
     assert cube.on == 'blue_box' and cube.position == get(world, 'blue_box').position
 
@@ -106,39 +106,39 @@ def test_place_into_a_box():
 def test_place_refusals(obj, location, named):
     world = packages()
     outcome = world.place(get(world, obj), get(world, location))
-    assert not outcome.ok and named in outcome.reason
+    assert not outcome.action_happened and named in outcome.reason
 
 
 # --- pour -------------------------------------------------------------------------
 
 def test_pour_into_a_bowl_and_into_a_tube():
     world = lab()
-    assert world.pour(get(world, 'red_tube'), get(world, 'empty_tube')).ok
+    assert world.pour(get(world, 'red_tube'), get(world, 'empty_tube')).action_happened
     tube = get(world, 'empty_tube')
     assert tube.holds_liquid and tube.liquid_color == 'red'
     source = get(world, 'red_tube')
     assert not source.holds_liquid and source.liquid_color == ''
-    assert world.pour(get(world, 'black_tube'), get(world, 'bowl')).ok
+    assert world.pour(get(world, 'black_tube'), get(world, 'bowl')).action_happened
     assert get(world, 'bowl').liquid_color == 'black'
 
 
 def test_pour_different_colours_mixes():
     world = lab()
-    assert world.pour(get(world, 'red_tube'), get(world, 'black_tube')).ok
+    assert world.pour(get(world, 'red_tube'), get(world, 'black_tube')).action_happened
     assert get(world, 'black_tube').liquid_color == 'mixed'
 
 
 def test_pour_refusals():
     world = lab()
     outcome = world.pour(get(world, 'empty_tube'), get(world, 'bowl'))
-    assert not outcome.ok and 'empty_tube' in outcome.reason
-    assert world.close(get(world, 'red_tube'), get(world, 'cap_1')).ok
+    assert not outcome.action_happened and 'empty_tube' in outcome.reason
+    assert world.close(get(world, 'red_tube'), get(world, 'cap_1')).action_happened
     outcome = world.pour(get(world, 'red_tube'), get(world, 'bowl'))
-    assert not outcome.ok and 'red_tube' in outcome.reason
+    assert not outcome.action_happened and 'red_tube' in outcome.reason
     outcome = world.pour(get(world, 'black_tube'), get(world, 'red_tube'))
-    assert not outcome.ok and 'closed' in outcome.reason
+    assert not outcome.action_happened and 'closed' in outcome.reason
     outcome = world.pour(get(world, 'black_tube'), get(world, 'cube'))
-    assert not outcome.ok and 'cube' in outcome.reason
+    assert not outcome.action_happened and 'cube' in outcome.reason
 
 
 # --- shake ------------------------------------------------------------------------
@@ -147,37 +147,40 @@ def test_shaking_an_open_tube_spills(monkeypatch):
     monkeypatch.setattr(config, 'MOCK_SPILL_FAILS_ACTION', False)
     world = lab()
     outcome = world.shake(get(world, 'red_tube'), 2)
-    assert outcome.ok and outcome.fault == 'spill' and 'red_tube' in outcome.reason
+    assert outcome.action_happened and outcome.fault == 'spill' and 'red_tube' in outcome.reason
     assert get(world, 'red_tube').spilled
     assert world.snapshot()['faults'][0]['fault'] == 'spill'
 
 
-def test_spill_can_fail_the_action(monkeypatch):
-    monkeypatch.setattr(config, 'MOCK_SPILL_FAILS_ACTION', True)
+@pytest.mark.parametrize('spill_fails', [False, True])
+def test_a_spill_always_happened_whatever_the_setting(monkeypatch, spill_fails):
+    monkeypatch.setattr(config, 'MOCK_SPILL_FAILS_ACTION', spill_fails)
     world = lab()
     outcome = world.shake(get(world, 'red_tube'), 2)
-    assert not outcome.ok and outcome.fault == 'spill'
+    assert outcome.action_happened and outcome.fault == 'spill'
+    assert get(world, 'red_tube').spilled
+    assert world.take_events()[0]['action_happened'] is True
 
 
 def test_shaking_a_closed_tube_is_fine():
     world = lab()
     world.close(get(world, 'red_tube'), get(world, 'cap_1'))
     outcome = world.shake(get(world, 'red_tube'), 3)
-    assert outcome.ok and not outcome.fault and not get(world, 'red_tube').spilled
+    assert outcome.action_happened and not outcome.fault and not get(world, 'red_tube').spilled
     assert world.snapshot()['faults'] == []
 
 
 @pytest.mark.parametrize('times', [0, -1, 1.5, True])
 def test_shake_needs_a_positive_whole_number(times):
     world = lab()
-    assert not world.shake(get(world, 'cube'), times).ok
+    assert not world.shake(get(world, 'cube'), times).action_happened
 
 
 # --- close ------------------------------------------------------------------------
 
 def test_close_with_a_matching_cap():
     world = lab()
-    assert world.close(get(world, 'red_tube'), get(world, 'cap_1')).ok
+    assert world.close(get(world, 'red_tube'), get(world, 'cap_1')).action_happened
     tube, cap = get(world, 'red_tube'), get(world, 'cap_1')
     assert tube.closed and tube.closed_by == 'cap_1' and cap.on == 'red_tube'
 
@@ -186,11 +189,11 @@ def test_close_refusals():
     world = lab()
     world.close(get(world, 'red_tube'), get(world, 'cap_1'))
     outcome = world.close(get(world, 'red_tube'), get(world, 'cap_2'))
-    assert not outcome.ok and 'already closed' in outcome.reason
+    assert not outcome.action_happened and 'already closed' in outcome.reason
     outcome = world.close(get(world, 'black_tube'), get(world, 'cap_1'))
-    assert not outcome.ok and 'cap_1' in outcome.reason
+    assert not outcome.action_happened and 'cap_1' in outcome.reason
     outcome = world.close(get(world, 'black_tube'), get(world, 'cube'))
-    assert not outcome.ok and 'cube is not a cap or lid' in outcome.reason
+    assert not outcome.action_happened and 'cube is not a cap or lid' in outcome.reason
 
 
 # --- state and events -------------------------------------------------------------
@@ -204,7 +207,7 @@ def test_close_refusals():
 def test_a_refused_action_changes_nothing(action):
     world = lab()
     before = world.snapshot()
-    assert not action(world).ok
+    assert not action(world).action_happened
     assert world.snapshot() == before
 
 
@@ -215,8 +218,8 @@ def test_take_events_returns_each_action_once():
     events = world.take_events()
     assert [e['action'] for e in events] == ['Place', 'Shake']
     assert events[0] == {'action': 'Place', 'arguments': {'obj': 'cube', 'location': 'bowl'},
-                         'ok': True, 'reason': '', 'fault': ''}
-    assert not events[1]['ok'] and events[1]['arguments'] == {'obj': 'cube', 'times': 0}
+                         'action_happened': True, 'reason': '', 'fault': ''}
+    assert not events[1]['action_happened'] and events[1]['arguments'] == {'obj': 'cube', 'times': 0}
     assert world.take_events() == []
 
 
@@ -317,7 +320,7 @@ def test_the_scene8_tubes_start_in_the_holder():
 def test_pouring_into_itself_is_refused():
     world = lab()
     outcome = world.pour(get(world, 'red_tube'), get(world, 'red_tube'))
-    assert not outcome.ok and outcome.reason == 'red_tube cannot be poured into itself'
+    assert not outcome.action_happened and outcome.reason == 'red_tube cannot be poured into itself'
     assert get(world, 'red_tube').holds_liquid
 
 
@@ -325,21 +328,22 @@ def test_a_cap_on_a_tube_cannot_be_moved():
     world = lab()
     world.close(get(world, 'red_tube'), get(world, 'cap_1'))
     outcome = world.place(get(world, 'cap_1'), get(world, 'bowl'))
-    assert not outcome.ok
+    assert not outcome.action_happened
     assert outcome.reason == 'cap_1 closes red_tube and cannot be moved on its own'
-    assert world.place(get(world, 'cap_2'), get(world, 'bowl')).ok
+    assert world.place(get(world, 'cap_2'), get(world, 'bowl')).action_happened
 
 
 def test_a_fixed_cap_cannot_close():
     world = MockWorld([thing('tube', 'test tube', 0.1, 0.1),
                        thing('fixed_cap', 'test tube cap', 0.2, 0.2, graspable=False)])
     outcome = world.close(get(world, 'tube'), get(world, 'fixed_cap'))
-    assert not outcome.ok and 'fixed_cap is fixed' in outcome.reason
+    assert not outcome.action_happened and 'fixed_cap is fixed' in outcome.reason
     assert not get(world, 'tube').closed
 
 
-def test_a_failing_spill_is_the_one_refusal_that_changes_the_table(monkeypatch):
+def test_a_refused_shake_changes_nothing_with_the_setting_on(monkeypatch):
     monkeypatch.setattr(config, 'MOCK_SPILL_FAILS_ACTION', True)
     world = lab()
-    assert not world.shake(get(world, 'red_tube'), 1).ok
-    assert get(world, 'red_tube').spilled
+    before = world.snapshot()
+    assert not world.shake(get(world, 'red_tube'), 0).action_happened
+    assert world.snapshot() == before

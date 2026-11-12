@@ -4,9 +4,8 @@ The rules follow prompts/generic_actions.txt and prompts/judge_physical_facts.tx
 action checks its rules in order and refuses with the first one that is broken, changing
 nothing; otherwise it changes the table. Every call is recorded as an event.
 
-The one exception to "a failed action changes nothing" is a spill with
-config.MOCK_SPILL_FAILS_ACTION = True: the shake returns ok=False, but the table changes,
-because the spill happened.
+The world reports what really happened: a spill is an action that happened with a fault.
+Whether a fault fails the node is decided by the node (modules/bt_nodes.py).
 """
 
 import copy
@@ -160,7 +159,7 @@ class MockWorld(World):
         def effect(obj, location):
             obj.on = location.id
             obj.position = dict(location.position)
-            return Outcome(ok=True)
+            return Outcome(action_happened=True)
         return self._act('Place', PLACE_RULES, effect, obj=obj, location=location)
 
     def pour(self, source, target):
@@ -172,15 +171,15 @@ class MockWorld(World):
             target.holds_liquid = True
             source.holds_liquid = False
             source.liquid_color = ''
-            return Outcome(ok=True)
+            return Outcome(action_happened=True)
         return self._act('Pour', POUR_RULES, effect, source=source, target=target)
 
     def shake(self, obj, times):
         def effect(obj, times):
             if not obj.holds_liquid or obj.closed:
-                return Outcome(ok=True)
+                return Outcome(action_happened=True)
             obj.spilled = True
-            return Outcome(ok=not config.MOCK_SPILL_FAILS_ACTION, fault='spill',
+            return Outcome(action_happened=True, fault='spill',
                            reason=f'{obj.id} was shaken while open and spilled')
         return self._act('Shake', SHAKE_RULES, effect, obj=obj, times=times)
 
@@ -189,7 +188,7 @@ class MockWorld(World):
             obj.closed = True
             obj.closed_by = closing_obj.id
             closing_obj.on = obj.id
-            return Outcome(ok=True)
+            return Outcome(action_happened=True)
         return self._act('Close', CLOSE_RULES, effect, obj=obj, closing_obj=closing_obj)
 
     def _act(self, action, rules, effect, **arguments):
@@ -200,14 +199,14 @@ class MockWorld(World):
             if isinstance(value, WorldObject):
                 own = self._by_id(value.id)
                 if own is None:
-                    outcome = Outcome(ok=False, reason=f'{value.id} is not on the table')
+                    outcome = Outcome(action_happened=False, reason=f'{value.id} is not on the table')
                     break
                 value = own
             resolved[name] = value
         if outcome is None:
             for test, reason in rules:
                 if not test(self, **resolved):
-                    outcome = Outcome(ok=False, reason=reason.format(**resolved))
+                    outcome = Outcome(action_happened=False, reason=reason.format(**resolved))
                     break
         if outcome is None:
             outcome = effect(**resolved)
@@ -218,7 +217,7 @@ class MockWorld(World):
             'action': action,
             'arguments': {name: value.id if isinstance(value, WorldObject) else value
                           for name, value in arguments.items()},
-            'ok': outcome.ok,
+            'action_happened': outcome.action_happened,
             'reason': outcome.reason,
             'fault': outcome.fault,
         })

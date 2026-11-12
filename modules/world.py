@@ -42,12 +42,14 @@ class WorldObject:
 class Outcome:
     """The result of an action.
 
-    ``ok`` is False when the action could not be carried out; ``reason`` then says why in
-    one sentence that names the objects. ``fault`` names something that went physically
-    wrong although the action was carried out (for example "spill"); '' otherwise.
+    ``action_happened`` is False when the action could not be carried out; ``reason`` then
+    says why in one sentence that names the objects, and nothing has changed. ``fault``
+    names something that went physically wrong although the action was carried out (for
+    example "spill"); '' otherwise. The world reports what happened; the tree's nodes
+    decide whether a fault fails them (config.MOCK_SPILL_FAILS_ACTION).
     """
 
-    ok: bool
+    action_happened: bool
     reason: str = ''
     fault: str = ''
 
@@ -95,4 +97,4 @@ class World(abc.ABC):
     @abc.abstractmethod
     def take_events(self) -> list[dict]:
         """The actions carried out since the last call, oldest first, then forget them.
-        Each is {'action', 'arguments', 'ok', 'reason', 'fault'}."""
+        Each is {'action', 'arguments', 'action_happened', 'reason', 'fault'}."""

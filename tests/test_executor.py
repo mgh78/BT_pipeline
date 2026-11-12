@@ -90,7 +90,7 @@ def test_scene6_without_graspable_fails_on_the_palette():
     assert result['status'] == 'FAILURE' and result['stopped'] == 'finished'
     assert placements(result) == PLACED
     done = events(result)
-    assert [event['ok'] for event in done] == [True] * 5 + [False]
+    assert [event['action_happened'] for event in done] == [True] * 5 + [False]
     last = done[-1]
     assert last['arguments'] == {'obj': 'brown_palette', 'location': 'blue_box'}
     assert 'brown_palette' in last['reason']
@@ -107,7 +107,7 @@ def test_scene6_with_graspable_succeeds():
     result = run('scene6', SCENE6_GRASPABLE)
     assert result['status'] == 'SUCCESS' and result['stopped'] == 'finished'
     assert placements(result) == PLACED
-    assert all(event['ok'] for event in events(result))
+    assert all(event['action_happened'] for event in events(result))
 
 
 # --- 3: scene8 -----------------------------------------------------------------------

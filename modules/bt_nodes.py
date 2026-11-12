@@ -65,8 +65,14 @@ class _Action(_Node, register=False):
     action = 'Action'        # how modules/graph.py tells actions from other leaves
 
     def report(self, outcome, done):
-        """The world's outcome as a status; done is the sentence for a plain success."""
-        return self.finish(outcome.ok, outcome.reason or done)
+        """The world's outcome as a status; done is the sentence for a plain success.
+
+        FAILURE when the action did not happen, or when it happened with a fault and
+        config.MOCK_SPILL_FAILS_ACTION is True; SUCCESS otherwise.
+        """
+        failed = not outcome.action_happened or (
+            bool(outcome.fault) and config.MOCK_SPILL_FAILS_ACTION)
+        return self.finish(not failed, outcome.reason or done)
 
 
 class Place(_Action):
