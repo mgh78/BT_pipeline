@@ -997,8 +997,16 @@ Any past run can be reopened from the run menu at the top right of the window, a
 
 ## The graph
 
-The layout is computed once (`layout()` in [modules/graph.py](modules/graph.py)) and used
-everywhere: the canvas in the window, `bt_graph.png` drawn with Pillow, and `bt_graph.dot`.
+No graph library places the nodes. The layout is our own code, computed once (`layout()`
+in [modules/graph.py](modules/graph.py)): every box is sized from its text, leaves go left
+to right, and each parent is centred over its children. That one layout is then drawn
+three ways, so they all show the same picture:
+
+| Output | Drawn with | Where |
+|---|---|---|
+| the canvas in the window | a tkinter `Canvas` (the buttons around it are customtkinter) | `GraphView` in [gui/graph_view.py](gui/graph_view.py) |
+| `bt_graph.png` | Pillow (`ImageDraw`) | `render_png()` in [modules/graph.py](modules/graph.py) |
+| `bt_graph.dot` | plain text, written by hand | `to_dot()` in [modules/graph.py](modules/graph.py) |
 Every node type has its own colour, and a **legend** under the tree declares them:
 
 | Node | Colour | Symbol | Meaning |
@@ -1029,8 +1037,10 @@ find node or `ForEach` writes a key. As explained in
 [modules/graph.py](modules/graph.py)). The lines are saved in `bt_graph.json`; an older file
 without them is redrawn with the lines worked out from the tree.
 
-The `.dot` file is written always (without the notation lines). When the graphviz `dot`
-binary is installed, a `bt_graph_graphviz.png` is rendered from it as well:
+The `.dot` file is written always (without the notation lines). When the Graphviz `dot`
+program is installed, `render_graphviz()` runs it with `subprocess` to render a
+`bt_graph_graphviz.png` as well. Graphviz lays the tree out itself, so that picture can
+differ from ours. No Python package is needed for it, only the program:
 
 ```bash
 brew install graphviz
@@ -1214,15 +1224,15 @@ No test calls a model: the loop is driven with scripted replies. 272 tests:
 | Package | Used for |
 |---|---|
 | `py_trees>=2.6` | builds and runs the XML tree (2.6 brought the XML parser) |
-| `pydot>=3.0` | DOT handling for the graph export |
-| `graphviz>=0.20` | optional: renders `bt_graph.dot` when the `dot` binary exists |
 | `openai>=1.0` | the model calls |
 | `customtkinter>=5.2` | the window |
 | `pillow>=10.0` | the scene photos and `bt_graph.png` |
 | `pytest>=8.0` | the tests |
 
-`py_trees` and `pydot` were the only additions to the contextual-asr environment. The mock
-world and the executor use nothing beyond py_trees and the standard library.
+`py_trees` was the only addition to the contextual-asr environment. The graph's canvas uses
+tkinter, which comes with Python, and the optional `bt_graph_graphviz.png` needs only the
+Graphviz program (`brew install graphviz`), not a Python package. The mock world and the
+executor use nothing beyond py_trees and the standard library.
 
 ---
 
