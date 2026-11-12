@@ -59,14 +59,15 @@ def main():
         sys.exit(str(error))
 
     result = execute(tree_xml, world)
+    colour = sys.stdout.isatty()           # red refusals and faults, but not in a file
 
     if arguments.step:
         for entry in result['trace']:
-            print(format_tick(entry) + '\n')
+            print(format_tick(entry, colour) + '\n')
             pause()
         print(format_summary(result))
     else:
-        print(format_trace(result))
+        print(format_trace(result, colour))
     if arguments.json:
         arguments.json.write_text(json.dumps(result, indent=2), encoding='utf-8')
         print(f'\nSaved the full result to {arguments.json}')

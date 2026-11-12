@@ -73,8 +73,10 @@ def test_new_and_changed_keys_are_marked():
 def test_the_refusal_of_the_palette_is_red():
     _, lines = lines_of(SCENE6_TREE)
     assert styled(lines, 'refused') == [
-        '  Place(obj=brown_palette, location=blue_box) REFUSED: brown_palette is fixed '
+        '  Place(obj=brown_palette, location=blue_box) refused — brown_palette is fixed '
         'and cannot be grasped']
+    assert '  Place(obj=white_package_1, location=blue_box) done' in styled(lines, 'event_done')
+    assert not any(' ok' in text or 'REFUSED' in text for text, _ in lines)
 
 
 def test_the_final_table():
@@ -103,7 +105,9 @@ def test_the_final_table_shows_caps_liquids_and_faults():
     _, lines = lines_of(tree, scene='scene8')
     assert '  transparent_test_tube_1, by yellow_test_tube_cap_2' in texts(lines)
     assert '  transparent_test_tube_2: transparent red (spilled)' in texts(lines)
-    assert any('ok, fault spill' in text for text in styled(lines, 'fault'))
+    assert styled(lines, 'event_fault') == [
+        '  Shake(obj=transparent_test_tube_2, times=1) done, FAULT: spill — '
+        'transparent_test_tube_2 was shaken while open and spilled']
     assert '  spill: transparent_test_tube_2 was shaken while open and spilled' in \
         styled(lines, 'fault')
     assert lines[1][0].endswith('Faults: 1')

@@ -246,6 +246,29 @@ def test_format_trace_shows_the_run():
     assert 'brown_palette:' not in text.split('Where every graspable object ended up:')[1]
 
 
+def test_format_trace_shows_done_and_refused():
+    text = format_trace(run('scene6', SCENE6_TREE))
+    assert '  Place(obj=white_package_1, location=blue_box) done\n' in text
+    assert ('  Place(obj=brown_palette, location=blue_box) refused — brown_palette is fixed '
+            'and cannot be grasped') in text
+    assert ' ok' not in text and 'REFUSED' not in text and '\033[' not in text
+
+
+def test_format_trace_shows_a_fault_as_done_with_the_fault():
+    text = format_trace(run('scene8', document(*close_and_shake(1, close=False))))
+    assert ('Shake(obj=transparent_test_tube_1, times=2) done, FAULT: spill — '
+            'transparent_test_tube_1 was shaken while open and spilled') in text
+
+
+def test_coloured_trace_makes_refusals_and_faults_red():
+    from modules.executor import RED, RESET
+    text = format_trace(run('scene6', SCENE6_TREE), colour=True)
+    assert f'{RED}refused{RESET} — brown_palette' in text
+    assert f'blue_box) done\n' in text
+    text = format_trace(run('scene8', document(*close_and_shake(1, close=False))), colour=True)
+    assert f'{RED}done, FAULT: spill{RESET}' in text
+
+
 def test_format_trace_shows_faults():
     text = format_trace(run('scene8', document(*close_and_shake(1, close=False))))
     assert 'spill: transparent_test_tube_1 was shaken while open and spilled' in text

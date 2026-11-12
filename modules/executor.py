@@ -114,18 +114,38 @@ def _plain(value):
 
 # --- Printing -------------------------------------------------------------------------
 
-def format_trace(result):
+RED, RESET = '\033[31m', '\033[0m'     # for a terminal that shows colours
+
+
+def event_outcome(event):
+    """How an event is shown: ('done' | 'done, FAULT: <fault>' | 'refused', reason)."""
+    if not event['action_happened']:
+        return 'refused', event['reason']
+    if event['fault']:
+        return f'done, FAULT: {event["fault"]}', event['reason']
+    return 'done', event['reason']
+
+
+def event_line(event, colour=False):
+    """One world event as text: the action, done or refused, and the reason."""
+    arguments = ', '.join(f'{name}={value}' for name, value in event['arguments'].items())
+    outcome, reason = event_outcome(event)
+    if colour and outcome != 'done':
+        outcome = f'{RED}{outcome}{RESET}'
+    return f'{event["action"]}({arguments}) {outcome}' + (f' — {reason}' if reason else '')
+
+def format_trace(result, colour=False):
     """The result as plain text for a terminal: per tick, every node that ran with its
     status and feedback, every blackboard read and write, the world's events, and the
     blackboard afterwards; then the final status, where every graspable object ended up,
-    and any faults."""
-    parts = [format_tick(entry) for entry in result['trace']]
+    and any faults. With colour, refusals and faults are red."""
+    parts = [format_tick(entry, colour) for entry in result['trace']]
     parts.append(format_summary(result))
     return '\n\n'.join(parts)
 
 
-def format_tick(entry):
-    """One tick of the trace as text."""
+def format_tick(entry, colour=False):
+    """One tick of the trace as text. With colour, refusals and faults are red."""
     lines = [f'--- tick {entry["tick"]} ' + '-' * 60, 'Nodes that ran:']
     for node in entry['visited']:
         feedback = f': {node["feedback"]}' if node['feedback'] else ''
@@ -137,11 +157,7 @@ def format_tick(entry):
         lines.append('  (none)')
     lines.append('World events:')
     for event in entry['events']:
-        arguments = ', '.join(f'{name}={value}' for name, value in event['arguments'].items())
-        result = 'ok' if event['action_happened'] else 'REFUSED'
-        fault = f' [fault: {event["fault"]}]' if event['fault'] else ''
-        reason = f': {event["reason"]}' if event['reason'] else ''
-        lines.append(f'  {event["action"]}({arguments}) {result}{fault}{reason}')
+        lines.append('  ' + event_line(event, colour))
     if not entry['events']:
         lines.append('  (none)')
     lines.append('Blackboard afterwards:')

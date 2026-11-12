@@ -5,6 +5,7 @@ the tags gui/execution_view.py colours.
 """
 
 from modules import xml_tree
+from modules.executor import event_line, event_outcome
 
 # The node types that act or check; the others (Sequence, Selector, decorators) only pass
 # their children's status up.
@@ -83,14 +84,10 @@ def _tick(entry, previous):
 
     lines.append(('World events', 'section'))
     for event in entry['events']:
-        arguments = ', '.join(f'{name}={value}' for name, value in event['arguments'].items())
-        text = f'  {event["action"]}({arguments})'
-        if not event['action_happened']:
-            lines.append((f'{text} REFUSED: {event["reason"]}', 'refused'))
-        elif event['fault']:
-            lines.append((f'{text} ok, fault {event["fault"]}: {event["reason"]}', 'fault'))
-        else:
-            lines.append((f'{text} ok', 'event_ok'))
+        outcome, _ = event_outcome(event)
+        style = ('refused' if outcome == 'refused' else 'event_done' if outcome == 'done'
+                 else 'event_fault')
+        lines.append(('  ' + event_line(event), style))
     if not entry['events']:
         lines.append(('  (none)', 'muted'))
     lines.append(('', 'plain'))
