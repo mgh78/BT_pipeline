@@ -182,6 +182,7 @@ class Pipeline:
             total = time.time() - started
             summary = {
                 'run_id': context.run_id,
+                'mode': getattr(context, 'mode', None),
                 'scene': payload.get('scene'),
                 'command': payload.get('command'),
                 'created_at': context.created_at.isoformat(timespec='seconds'),

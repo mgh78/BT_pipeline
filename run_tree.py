@@ -1,8 +1,10 @@
 """Watch a behavior tree run on the mock world, tick by tick.
 
-    python run_tree.py tree.xml --scene scene6           # any XML file on a scene
-    python run_tree.py --run data/runs/<run id>          # a run's bt.xml, on that run's scene
-    python run_tree.py tree.xml --scene scene6 --step    # pause after every tick (Enter)
+    python run_tree.py tree.xml --scene scene6             # any XML file on a scene
+    python run_tree.py --run data/runs/<mode id>/<run id>  # a run's bt.xml, on its scene
+    python run_tree.py --run data/runs/<run id>            # an old run, made before modes
+    python run_tree.py --run <run id>                      # a run found by its id alone
+    python run_tree.py tree.xml --scene scene6 --step      # pause after every tick (Enter)
     python run_tree.py tree.xml --scene scene6 --json out.json
 """
 
@@ -13,6 +15,7 @@ from pathlib import Path
 
 import config
 from core.pipeline import StageError
+from core.run_context import RunContext
 from modules.executor import execute, format_summary, format_tick, format_trace
 from modules.mock_world import MockWorld
 from modules.scene import load_scene
@@ -22,8 +25,8 @@ def read_arguments():
     parser = argparse.ArgumentParser(description='Watch a behavior tree run on the mock world.')
     parser.add_argument('tree', nargs='?', type=Path, help='an XML file; needs --scene')
     parser.add_argument('--scene', choices=config.SCENES, help='the scene to run it on')
-    parser.add_argument('--run', type=Path, metavar='RUN_FOLDER',
-                        help="a run folder: its bt.xml, on that run's scene")
+    parser.add_argument('--run', metavar='RUN',
+                        help="a run folder or a run id: its bt.xml, on that run's scene")
     parser.add_argument('--step', action='store_true', help='pause after every tick (Enter)')
     parser.add_argument('--json', type=Path, metavar='FILE', help='also save the full result')
     arguments = parser.parse_args()
@@ -31,10 +34,11 @@ def read_arguments():
     if arguments.run:
         if arguments.tree or arguments.scene:
             parser.error('--run takes the tree and the scene from the run; give neither')
-        arguments.tree = arguments.run / 'bt.xml'
-        summary = arguments.run / 'summary.json'
-        if not summary.is_file():
-            parser.error(f'{summary} does not exist')
+        stored = RunContext.find(arguments.run)
+        if stored is None:
+            parser.error(f'there is no run {arguments.run} with a summary.json')
+        arguments.tree = stored.directory / 'bt.xml'
+        summary = stored.directory / 'summary.json'
         arguments.scene = json.loads(summary.read_text(encoding='utf-8'))['scene']
     elif not arguments.tree or not arguments.scene:
         parser.error('give an XML file with --scene, or --run with a run folder')

@@ -122,6 +122,7 @@ class App(customtkinter.CTk):
         self._payload_png = None   # the saved image of the accepted tree
         self._judged = True        # False when the run on screen was a baseline
         self._run_scene = None     # the scene of the run on screen, for the Execution tab
+        self._stored_runs = {}     # run menu label -> StoredRun
 
         self.grid_columnconfigure(0, weight=0, minsize=420)
         self.grid_columnconfigure(1, weight=3, minsize=480)
@@ -138,6 +139,7 @@ class App(customtkinter.CTk):
         self.log_view.grid(row=2, column=0, columnspan=3, sticky='nsew',
                            padx=16, pady=(0, 12))
 
+        self._refresh_runs()
         self.status('Choose a scene, type a command, then run the pipeline.')
         log.info('interface ready')
 
@@ -157,7 +159,7 @@ class App(customtkinter.CTk):
         self.status_label.grid(row=0, column=1, sticky='ew', padx=16)
 
         self.run_menu = customtkinter.CTkOptionMenu(
-            header, values=['current run'], width=210, command=self.open_run)
+            header, values=['current run'], width=340, command=self.open_run)
         self.run_menu.grid(row=0, column=2, padx=(0, 8))
         self.run_menu.set('current run')
 
@@ -358,7 +360,8 @@ class App(customtkinter.CTk):
         self.check_table.show([])
         self.execution_view.unavailable('Wait for the pipeline run to finish.')
 
-        self.context = RunContext(scene=scene)
+        mode = 'static_creator_dynamic_judge' if self.judging else 'static_creator'
+        self.context = RunContext(scene=scene, mode=mode)
         self.payload = {
             'scene': scene,
             'command': command,
@@ -366,8 +369,7 @@ class App(customtkinter.CTk):
             'judge_model': self.judge_menu.get(),
             'generation_reasoning_effort': self.effort_menu.get(),
             'judge_reasoning_effort': self.judge_effort_menu.get(),
-            'mode': ('static_creator_dynamic_judge' if self.judging
-                     else 'static_creator'),
+            'mode': mode,
         }
         self.running = True
         self.run_button.configure(state='disabled', text='Running…')
@@ -534,7 +536,8 @@ class App(customtkinter.CTk):
 
     def _refresh_runs(self):
         runs = RunContext.existing_runs()[:40]
-        self.run_menu.configure(values=['current run', *runs])
+        self._stored_runs = {run.label: run for run in runs}
+        self.run_menu.configure(values=['current run', *self._stored_runs])
         self.run_menu.set('current run')
 
     def _load_stored_attempts(self, directory, summary):
@@ -580,18 +583,22 @@ class App(customtkinter.CTk):
         self.attempt_menu.set(labels[-1])
         self.show_attempt(labels[-1])
 
-    def open_run(self, run_id):
-        """Reopen a finished run from its directory."""
-        if run_id == 'current run':
+    def open_run(self, label):
+        """Reopen a finished run from its directory, in its mode folder or an old one."""
+        if label == 'current run':
             return
-        directory = config.RUNS_DIR / run_id
+        stored = self._stored_runs.get(label) or RunContext.find(label)
+        if stored is None:
+            self.status(f'There is no run {label}.', error=True)
+            return
+        run_id, directory = stored.run_id, stored.directory
         summary_file = directory / 'summary.json'
         if not summary_file.exists():
             self.status(f'{run_id} has no summary.json.', error=True)
             return
 
         summary = json.loads(summary_file.read_text(encoding='utf-8'))
-        self.context = RunContext.load(run_id)
+        self.context = RunContext.load(directory)
         self.folder_button.configure(state='normal')
 
         for panel in self.panels.values():
@@ -619,7 +626,8 @@ class App(customtkinter.CTk):
         else:
             self.graph_view.clear('This run produced no tree.')
 
-        self.status(f'Showing {run_id} ({summary.get("total_seconds", 0):.1f}s).')
+        self.status(f'Showing {run_id}, {stored.mode_title} '
+                    f'({summary.get("total_seconds", 0):.1f}s).')
         log.info('reopened run %s', run_id)
 
     # --- Small helpers --------------------------------------------------
