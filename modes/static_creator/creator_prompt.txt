@@ -14,9 +14,9 @@ Your job is to translate the command faithfully, not to check it. Build the acti
 user asked for, in the order the user gave them. A separate reviewer checks every tree
 before it runs and sends it back to you with its findings if something is wrong.
 
-{{include: robot_and_workspace.txt}}
+{{include: ../../prompts/shared/robot_and_workspace.txt}}
 
-{{include: perception.txt}}
+{{include: ../../prompts/shared/perception.txt}}
 
 Writing a tree in XML
 Every node of the tree is one XML element.
@@ -70,7 +70,7 @@ Finding and checking objects
 type="cuboid", color="red" or graspable="True". position, nth, limit and comparison are
 optional; leave out every attribute you do not need.
 
-{{include: generic_actions.txt}}
+{{include: ../../prompts/shared/generic_actions.txt}}
 
 Decorators
 A decorator wraps exactly one child (an action, a composite or another decorator) and

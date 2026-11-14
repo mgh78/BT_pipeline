@@ -17,7 +17,13 @@ import config  # noqa: E402
 from core.pipeline import StageError  # noqa: E402
 from modules.prompt_files import INCLUDE_PATTERN, load_prompt  # noqa: E402
 
-MAIN_PROMPTS = [config.BT_GENERATION_PROMPT_FILE, config.SEMANTIC_JUDGE_PROMPT_FILE]
+MODES = config.PIPELINE_ROOT / 'modes'
+SHARED = config.PIPELINE_ROOT / 'prompts' / 'shared'
+STATIC_CREATOR = MODES / 'static_creator' / 'creator_prompt.txt'
+JUDGED_CREATOR = MODES / 'static_creator_dynamic_judge' / 'creator_prompt.txt'
+DYNAMIC_CREATOR = MODES / 'dynamic_creator' / 'creator_prompt.txt'
+MAIN_PROMPTS = [STATIC_CREATOR, JUDGED_CREATOR, DYNAMIC_CREATOR,
+                config.SEMANTIC_JUDGE_PROMPT_FILE]
 
 
 def test_include_is_replaced_by_the_file(tmp_path):
@@ -54,12 +60,19 @@ def test_endless_include_is_an_error(tmp_path):
 def test_real_prompts_assemble_completely(path):
     text = load_prompt(path)
     assert not INCLUDE_PATTERN.search(text)
-    if path == config.SEMANTIC_JUDGE_PROMPT_FILE:
-        assert '{scene_objects}' in text      # the generic generator is not shown the scene
+    # Only the judge and the Dynamic creator are shown the scene.
+    shown = path in (config.SEMANTIC_JUDGE_PROMPT_FILE, DYNAMIC_CREATOR)
+    assert ('{scene_objects}' in text) == shown
+
+
+def test_both_static_creator_prompts_are_the_same_prompt():
+    assert load_prompt(JUDGED_CREATOR) == load_prompt(STATIC_CREATOR)
+    assert JUDGED_CREATOR.read_text().strip() == (
+        '{{include: ../static_creator/creator_prompt.txt}}')
 
 
 def test_both_prompts_include_the_shared_parts():
-    folder = config.SEMANTIC_JUDGE_PROMPT_FILE.parent
+    folder = SHARED
     generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
     judge = load_prompt(config.SEMANTIC_JUDGE_PROMPT_FILE)
     robot = (folder / 'robot_and_workspace.txt').read_text().rstrip('\n')
@@ -69,7 +82,7 @@ def test_both_prompts_include_the_shared_parts():
     assert actions in generation and actions in judge
     perception = (folder / 'perception.txt').read_text().rstrip('\n')
     assert perception in generation and perception in judge
-    assert (folder / 'judge_physical_facts.txt').read_text().rstrip('\n') in judge
+    assert (folder / 'physical_facts.txt').read_text().rstrip('\n') in judge
 
 
 def test_the_generation_prompt_has_no_physical_facts():
@@ -80,7 +93,7 @@ def test_the_generation_prompt_has_no_physical_facts():
 
 
 def test_the_perception_vocabulary_in_the_config_is_in_the_prompt_file():
-    text = (config.SEMANTIC_JUDGE_PROMPT_FILE.parent / 'perception.txt').read_text()
+    text = (SHARED / 'perception.txt').read_text()
     flat = ' '.join(text.split())
     for value in config.PERCEPTION_TYPES:
         assert value in flat, value

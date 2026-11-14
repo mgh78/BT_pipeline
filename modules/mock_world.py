@@ -1,8 +1,8 @@
 """A world in plain Python: one of the pipeline's scenes, and the physical rules.
 
-The rules follow prompts/generic_actions.txt and prompts/judge_physical_facts.txt. Each
-action checks its rules in order and refuses with the first one that is broken, changing
-nothing; otherwise it changes the table. Every call is recorded as an event.
+The rules follow prompts/shared/generic_actions.txt and prompts/shared/physical_facts.txt.
+Each action checks its rules in order and refuses with the first one that is broken,
+changing nothing; otherwise it changes the table. Every call is recorded as an event.
 
 The world reports what really happened: a spill is an action that happened with a fault.
 Whether a fault fails the node is decided by the node (modules/bt_nodes.py).

@@ -20,8 +20,9 @@ OBJECT_NORMALIZED_FILE = WORKSPACE_KNOWLEDGE_DIR / 'object_normalized.csv'
 COLOR_NORMALIZED_FILE = WORKSPACE_KNOWLEDGE_DIR / 'color_normalized.csv'
 
 # The behavior tree generation prompt is ours to edit, so it lives here.
-BT_GENERATION_PROMPT_FILE = PIPELINE_ROOT / 'prompts' / 'bt_generation_prompt.txt'
-SEMANTIC_JUDGE_PROMPT_FILE = BT_GENERATION_PROMPT_FILE.parent / 'semantic_judge_prompt.txt'
+BT_GENERATION_PROMPT_FILE = PIPELINE_ROOT / 'modes' / 'static_creator' / 'creator_prompt.txt'
+SEMANTIC_JUDGE_PROMPT_FILE = (PIPELINE_ROOT / 'modes' / 'static_creator_dynamic_judge'
+                              / 'judge_prompt.txt')
 
 # The API key file. The OPENAI_API_KEY environment variable takes precedence.
 API_KEY_FILE = CONTEXTUAL_ASR_DIR / 'API_KEY.txt'

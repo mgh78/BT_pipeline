@@ -1,0 +1,1 @@
+{{include: ../static_creator/creator_prompt.txt}}

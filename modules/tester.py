@@ -1,9 +1,9 @@
 """Stage 5 - the syntax tester.
 
 This stage decides whether the tree the generator wrote is well formed. The generator
-writes the tree as XML (see ``prompts/bt_generation_prompt.txt``); the checks themselves
-live in ``modules/xml_tree.py``. Nothing is executed on the robot: the only thing run is
-the py_trees XML parser, which builds the tree from the stand-in nodes of
+writes the tree as XML (see ``modes/static_creator/creator_prompt.txt``); the checks
+themselves live in ``modules/xml_tree.py``. Nothing is executed on the robot: the only
+thing run is the py_trees XML parser, which builds the tree from the stand-in nodes of
 ``modules/bt_nodes.py`` - the only way to prove the document really is a tree.
 
 The checks are grouped, and each one reports on its own so a failure points at a line:

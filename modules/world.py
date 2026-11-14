@@ -61,8 +61,8 @@ class World(abc.ABC):
     def perceive(self, properties: dict, position: str | None = None) -> list[WorldObject]:
         """Every object that has all these properties, in order (see the ordering rule).
 
-        The ordering rule, as in prompts/semantic_judge_prompt.txt, with a second key so a
-        tie always has the same answer:
+        The ordering rule, as in modes/static_creator_dynamic_judge/judge_prompt.txt, with a
+        second key so a tie always has the same answer:
         - without position: scan order, lowest y first, then lowest x;
         - "leftmost": lowest y first, then lowest x;
         - "rightmost": highest y first, then lowest x;

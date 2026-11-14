@@ -23,9 +23,9 @@ The user message contains:
   and an earlier finding can have been wrong.
 - BEHAVIOR TREE: the tree to judge now, as an outline.
 
-{{include: robot_and_workspace.txt}}
+{{include: ../../prompts/shared/robot_and_workspace.txt}}
 
-{{include: perception.txt}}
+{{include: ../../prompts/shared/perception.txt}}
 
 Scene
 Each line gives an object's id followed by its attributes. The tree's author did not see
@@ -33,9 +33,9 @@ this list.
 {scene_objects}
 
 
-{{include: generic_actions.txt}}
+{{include: ../../prompts/shared/generic_actions.txt}}
 
-{{include: judge_physical_facts.txt}}
+{{include: ../../prompts/shared/physical_facts.txt}}
 
 How to read the tree
 One node per line, children indented under their parent. Every line gives the node type
