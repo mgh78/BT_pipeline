@@ -89,5 +89,4 @@ errors: if you reject, one short phrase for each problem, in your own words; if 
 accept, an empty list.
 reason: if you reject, one sentence that explains the problem and names the node, its
 key and the properties involved. You may say what a find node finds or misses on this
-table, but do not list the objects on the table or their ids: the author must keep the
-tree generic. If you accept, an empty string.
+table. If you accept, an empty string.
