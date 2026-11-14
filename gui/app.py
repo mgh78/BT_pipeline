@@ -72,7 +72,7 @@ class ScenePanel(customtkinter.CTkFrame):
                                                   text_color='gray55')
         self.image_label.grid(row=2, column=0, padx=14, pady=8)
 
-        customtkinter.CTkLabel(self, text='Objects in the scene (not shown to the generator)', anchor='w',
+        customtkinter.CTkLabel(self, text='Objects in the scene', anchor='w',
                                text_color='gray60', font=('Arial', 11)).grid(
             row=3, column=0, padx=14, pady=(4, 0), sticky='sw')
 
