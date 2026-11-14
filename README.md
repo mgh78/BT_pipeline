@@ -1,22 +1,25 @@
 # Natural command → Behavior tree
 
-A typed command becomes a scene-aware command, then a behavior tree written in XML, which
-is checked, built with py_trees, judged, repaired until it is right, and drawn. The tree
-can then be **run on a mock world**: a plain-Python copy of the scene that applies the
+A typed command becomes a behavior tree written in XML, which is checked, built with
+py_trees, judged (in the mode that has a judge), repaired until it is right, and drawn.
+Every run is made in one of [three modes](#the-three-modes), which differ in what the
+tree's creator is shown and whether a judge checks its tree. The tree can then be **run on a mock world**: a plain-Python copy of the scene that applies the
 physical rules, so you can watch, tick by tick, what every node does. Execution in the
 Unity simulator comes later; nothing here talks to a robot.
 
 ```
-Making a tree:   Scene → Command → Scene-aware command → [ Behavior tree → Syntax check → Judge ] → Graph
+Making a tree:   Scene → Command → [ Behavior tree → Syntax check → Judge ] → Graph
 Running a tree:  bt.xml or attempts/NN/tree.xml → mock world of the scene → executor → trace
 ```
 
-The bracket is a loop. A rejected tree goes back to the generator with the reason, and the
-run ends when a tree is accepted or a cap is reached.
+The bracket is a loop. A tree that fails the syntax check, or that the judge rejects, goes
+back to the generator with the reason, and the run ends when a tree is accepted or a cap
+is reached. In the two modes without a judge, the first tree that passes the syntax check
+is the result.
 
 **Nothing ever waits for a person.** The generator always returns a tree (an unclear
-command is read the most reasonable way rather than questioned), and the semantic judge is
-the only thing that decides whether the tree is right.
+command is read the most reasonable way rather than questioned), and the command goes to
+it exactly as typed.
 
 **Making and running are separate.** A pipeline run makes, checks and judges a tree but
 never runs it. Running is done afterwards, from the terminal (`run_tree.py`) or from the
@@ -39,25 +42,24 @@ every file it produced.
 8. [The blackboard and the `{key}` notation](#the-blackboard-and-the-key-notation)
 9. [Where the grammar comes from](#where-the-grammar-comes-from)
 10. [Who decides what](#who-decides-what)
-11. [What the "Enrich with the scene first" switch changes](#what-the-enrich-with-the-scene-first-switch-changes)
-12. [The baseline: Judge or Baseline](#the-baseline-judge-or-baseline)
-13. [The generation loop, its caps, and how a run ends](#the-generation-loop-its-caps-and-how-a-run-ends)
-14. [The judgement form](#the-judgement-form)
-15. [What the judge sees on a later attempt](#what-the-judge-sees-on-a-later-attempt)
-16. [What the generator is told when a tree comes back](#what-the-generator-is-told-when-a-tree-comes-back)
-17. [What the syntax check checks](#what-the-syntax-check-checks)
-18. [Running a tree on the mock world](#running-a-tree-on-the-mock-world)
-19. [What a run leaves behind](#what-a-run-leaves-behind)
-20. [The graph](#the-graph)
-21. [The prompts](#the-prompts)
-22. [The scenes](#the-scenes)
-23. [The scene photo is not sent to the model](#the-scene-photo-is-not-sent-to-the-model)
-24. [Settings](#settings)
-25. [Logging](#logging)
-26. [Tests](#tests)
-27. [Requirements](#requirements)
-28. [Branches](#branches)
-29. [Known gaps](#known-gaps)
+11. [The three modes](#the-three-modes)
+12. [The generation loop, its caps, and how a run ends](#the-generation-loop-its-caps-and-how-a-run-ends)
+13. [The judgement form](#the-judgement-form)
+14. [What the judge sees on a later attempt](#what-the-judge-sees-on-a-later-attempt)
+15. [What the generator is told when a tree comes back](#what-the-generator-is-told-when-a-tree-comes-back)
+16. [What the syntax check checks](#what-the-syntax-check-checks)
+17. [Running a tree on the mock world](#running-a-tree-on-the-mock-world)
+18. [What a run leaves behind](#what-a-run-leaves-behind)
+19. [The graph](#the-graph)
+20. [The prompts](#the-prompts)
+21. [The scenes](#the-scenes)
+22. [The scene photo is not sent to the model](#the-scene-photo-is-not-sent-to-the-model)
+23. [Settings](#settings)
+24. [Logging](#logging)
+25. [Tests](#tests)
+26. [Requirements](#requirements)
+27. [Branches](#branches)
+28. [Known gaps](#known-gaps)
 
 ---
 
@@ -76,14 +78,17 @@ system `python3` does not have py_trees, and macOS has no plain `python` command
 | To… | Run |
 |---|---|
 | open the window | `python main.py` |
-| run a run's accepted tree on the mock world | `python run_tree.py --run data/runs/<run id>` |
-| …pausing after every tick | `python run_tree.py --run data/runs/<run id> --step` |
-| run one attempt's tree | `python run_tree.py data/runs/<run id>/attempts/01/tree.xml --scene scene8` |
-| run your latest run | `python run_tree.py --run data/runs/$(ls -t data/runs \| head -1) --step` |
+| run a run's accepted tree on the mock world | `python run_tree.py --run data/runs/<mode id>/<run id>` |
+| …the same, by the run's id alone | `python run_tree.py --run <run id>` |
+| …pausing after every tick | `python run_tree.py --run <run id> --step` |
+| run one attempt's tree | `python run_tree.py data/runs/<mode id>/<run id>/attempts/01/tree.xml --scene scene8` |
+| run your latest run of a mode | `python run_tree.py --run $(ls -t data/runs/dynamic_creator \| grep -v README \| head -1) --step` |
+| run an old run (made before the modes) | `python run_tree.py --run data/runs/<run id>` |
 | run the tests | `python -m pytest tests -q` |
 | install the requirements | `pip install -r requirements.txt` |
 
-In the window: pick one of the nine scenes, type a command, press **Run pipeline**.
+In the window: pick one of the nine scenes, type a command, choose a mode, press **Run
+pipeline**.
 
 The API key is read from the `OPENAI_API_KEY` environment variable, or from
 `contextual-asr/contextual-asr/API_KEY.txt` (the file must contain only the key).
@@ -94,8 +99,8 @@ The API key is read from the `OPENAI_API_KEY` environment variable, or from
 
 | Word | Meaning |
 |---|---|
-| **run** | One press of **Run pipeline**: one scene, one command, every attempt, in one folder `data/runs/<run id>/`. |
-| **attempt** | One tree the generator wrote during a run. A run has 1 to 5 attempts (at most 2 syntax failures plus 3 judged trees); each keeps its own folder `attempts/NN/`. |
+| **run** | One press of **Run pipeline**: one scene, one command, one mode, every attempt, in one folder `data/runs/<mode id>/<run id>/`. |
+| **attempt** | One tree the generator wrote during a run. A run has 1 to 5 attempts (at most 2 syntax failures plus 3 judged trees; at most 3 in a mode without a judge); each keeps its own folder `attempts/NN/`. |
 | **behavior tree** | A tree of nodes the robot runs from the top. Inner nodes decide the order; leaves act or check. |
 | **node** | One element of the tree, one XML tag: `Sequence`, `FindOne`, `Place`, … |
 | **composite** | A node with several children: `Sequence` or `Selector`. |
@@ -111,12 +116,14 @@ The API key is read from the `OPENAI_API_KEY` environment variable, or from
 | **key** | The name of a blackboard entry. Written plain (`key="palette"`) where a node writes it, and `{palette}` where a node reads the object stored there. |
 | **port** | A py_trees input that the XML parser wires to a blackboard key at build time. Every `{key}` argument is a port. |
 | **generic tree** | A tree that never names a scene object. It describes the objects it needs by what the robot perceives and finds them while it runs, so the same tree works on any table. |
-| **perception properties** | What the robot knows about each object: `type`, `color`, `liquid_color`, `graspable`, `holds_liquid`, `closed`, `marked` ([prompts/perception.txt](prompts/perception.txt)). |
-| **enrichment** | The optional first model call that rewrites the command with the scene's object names. |
-| **generator** | The model that writes the tree. It only translates the command; it never checks safety. |
+| **perception properties** | What the robot knows about each object: `type`, `color`, `liquid_color`, `graspable`, `holds_liquid`, `closed`, `marked` ([prompts/shared/perception.txt](prompts/shared/perception.txt)). |
+| **mode** | Which of the three set-ups a run is made in: which creator prompt is loaded and whether the judge is called ([modes/README.md](modes/README.md), [modules/modes.py](modules/modes.py)). |
+| **Static creator** | The mode `static_creator`: the creator gets only the command; no judge. |
+| **Static creator & Dynamic judge** | The mode `static_creator_dynamic_judge`: the creator gets only the command; the judge sees the scene and the physical facts and sends a rejected tree back, up to three times. The default. |
+| **Dynamic creator** | The mode `dynamic_creator`: the creator gets the command, the scene object list and the physical facts; no judge. |
+| **generator**, **creator** | The model that writes the tree. In the two Static modes it only translates the command and never checks whether it is physically possible; in the Dynamic creator mode it is asked to. |
 | **syntax check** | The static check of the XML: can this tree be built, and does it follow the grammar? No physical rules. |
 | **judge** | The model that decides whether a tree does what the user asked, in a physically possible way. |
-| **baseline** | A run with the judge switched off: the first tree that passes the syntax check is the result. |
 | **world** | Something a tree can act on. It answers "which objects have these properties?" and carries out actions. Today the mock world; later Unity. |
 | **mock world** | The plain-Python world: a copy of one scene's objects plus the physical rules ([modules/mock_world.py](modules/mock_world.py)). |
 | **executor** | `execute()` in [modules/executor.py](modules/executor.py): checks a tree, builds it for a world, ticks it to the end and records everything. |
@@ -126,6 +133,7 @@ The API key is read from the `OPENAI_API_KEY` environment variable, or from
 | **refused** | An action the world would not carry out because a rule was broken. Nothing on the table changes. |
 | **fault** | Something that went physically wrong although the action was carried out. Today only `spill`. |
 | **registry** | The tag → class map the py_trees parser builds the leaves from. |
+| **old run** | A run made before the modes existed, directly in `data/runs/<run id>/`. It is shown with the mode it matches and "(old run)"; many of them first rewrote the command with the scene's object names (the enrichment stage, since removed). |
 
 ---
 
@@ -139,12 +147,12 @@ pipeline/
 ├── requirements.txt
 ├── core/
 │   ├── pipeline.py          Stage, Pipeline, StageResult, StageStatus, Check, StageError
-│   ├── run_context.py       RunContext: the run id and the run folder, writes artifacts
+│   ├── run_context.py       RunContext: the run id, its mode and folder; lists and finds runs
 │   └── logging_setup.py     the log files, the per-run logs, the window's log buffer
 ├── modules/
 │   ├── scene.py             load_scene(): the objects of a scene, with unique ids
 │   ├── command.py           CommandStage: the typed command
-│   ├── enrichment.py        EnrichmentStage: the scene-aware command
+│   ├── modes.py             MODES, get(): the three modes, their prompt files, the judge or not
 │   ├── llm.py               ask(): the one place that calls the OpenAI API
 │   ├── prompt_files.py      load_prompt(): reads a prompt and its {{include: …}} lines
 │   ├── generator.py         BTGenerator: asks for the tree; as_document() writes bt.xml
@@ -165,10 +173,17 @@ pipeline/
 │   ├── log_view.py          the log pane along the bottom
 │   ├── execution_view.py    the Execution tab
 │   └── execution_text.py    the Execution tab's text (testable without the window)
-├── prompts/                 the generation and judge prompts and their shared parts
+├── modes/                   one folder per mode: its prompts and a README of what each model sees
+│   ├── README.md            the three modes side by side, and how to compare them
+│   ├── static_creator/
+│   ├── static_creator_dynamic_judge/
+│   └── dynamic_creator/
+├── prompts/
+│   ├── shared/              the prompt parts more than one mode includes
+│   └── actions.txt          the older actions with object ids; not used
 ├── tests/                   the test suite
 ├── update/                  task notes: what was changed and why, SCENES.md
-└── data/                    runs and logs (not in git)
+└── data/                    runs (data/runs/<mode id>/<run id>/) and logs (not in git)
 ```
 
 ---
@@ -179,15 +194,15 @@ Open it with `python main.py`.
 
 | Part | What it is |
 |---|---|
-| **Left column: Scene** | The scene menu, the scene photo, and the object list with ids, colours, roles and positions. The generator is never shown this list; the judge is. |
-| **Middle column: the command** | The command box; the **Enrich with the scene first** switch (on by default); the **Judge / Baseline** selector; the tree and judge model menus and their reasoning-effort menus; **Run pipeline**. |
-| **Middle column: Pipeline modules** | One panel per stage (Scene, Command, Scene-aware command, Generation loop, Tree graph): a coloured dot, what it did, how long it took. Open a panel to see its details and a button for every file it wrote. |
-| **Top right: run menu** | Reopens any past run from `data/runs/`. **Run folder** opens the run's folder. |
-| **Right column: Attempt menu** | Picks which attempt of the run the tabs below show: `1 · judge rejected`, `2 · judge accepted`, `1 · not judged` (baseline), `1 · syntax failed`, `1 · no code in the reply`. |
+| **Left column: Scene** | The scene menu, the scene photo, and the object list with ids, colours, roles and positions. The judge and the Dynamic creator are shown this list; the Static creator is not. |
+| **Middle column: the command** | The command box; the mode selector (**Static creator**, **Static creator & Dynamic judge**, **Dynamic creator**; the default is `DEFAULT_MODE`), and choosing one puts in the status line what a run in that mode will do; the tree and judge model menus and their reasoning-effort menus (the judge's are enabled only in Static creator & Dynamic judge); **Run pipeline**. |
+| **Middle column: Pipeline modules** | One panel per stage (Scene, Command, Generation loop, Tree graph): a coloured dot, what it did, how long it took. The Generation loop panel starts with the mode's title, and its details give the mode and the creator's prompt file. Open a panel to see its details and a button for every file it wrote. |
+| **Top right: run menu** | Reopens any past run: every run of the three mode folders and every old run, each shown as `<run id> · <mode title>` (old runs with "(old run)"). **Run folder** opens the run's folder. |
+| **Right column: Attempt menu** | Picks which attempt of the run the tabs below show: `1 · judge rejected`, `2 · judge accepted`, `1 · not judged` (a mode without a judge), `1 · syntax failed`, `1 · no code in the reply`. |
 | **Tree graph tab** | The attempt's tree on a canvas: zoom with −, + or the mouse wheel, **Fit**, drag to pan, click a node to see its arguments. **Open image** opens `bt_graph.png`. |
 | **XML tab** | The attempt's XML, with **Copy**. |
 | **Checks tab** | Every syntax check with its result and line number. |
-| **Judge tab** | The analysis, the verdict, the errors and the reason, and the tree outline the judge was shown. |
+| **Judge tab** | The analysis, the verdict, the errors and the reason, and the tree outline the judge was shown. In a mode without a judge: "This mode has no judge." |
 | **Execution tab** | **Run tree** runs the chosen attempt's tree on a fresh mock world of the run's scene and shows the whole execution (see [The Execution tab](#the-execution-tab)). |
 | **Bottom: Log** | Every module's log as it happens. Filter by module and level; **Log folder** opens `data/logs/`. |
 
@@ -197,13 +212,12 @@ Open it with `python main.py`.
 
 | Module | File | What it does |
 |---|---|---|
-| Scene | [modules/scene.py](modules/scene.py) | Loads a scene and gives every object a unique id (`transparent_test_tube_1`). Produces the object list the judge sees and the scene dictionary the enrichment sees. |
+| Scene | [modules/scene.py](modules/scene.py) | Loads a scene and gives every object a unique id (`transparent_test_tube_1`). Produces the object list the judge and the Dynamic creator see. |
 | Command | [modules/command.py](modules/command.py) | The typed command. Isolated so the ASR can replace it later without touching anything else. |
-| Scene-aware command | [modules/enrichment.py](modules/enrichment.py) | The contextual-asr post-processing, with the same five prompt files. Rewrites "the left tube" into the object that is actually there. Optional. |
-| Behavior tree | [modules/generator.py](modules/generator.py) | Asks the model for the tree as an XML document, using [prompts/bt_generation_prompt.txt](prompts/bt_generation_prompt.txt). It only translates: it never checks whether the plan is safe or complete. |
+| Behavior tree | [modules/generator.py](modules/generator.py) | Asks the model for the tree as an XML document, using the mode's `creator_prompt.txt` ([modes/](modes/README.md)). In the two Static modes it only translates and never checks whether the plan is physically possible; the Dynamic creator is shown the scene and the physical facts and asked to. |
 | Syntax check | [modules/xml_tree.py](modules/xml_tree.py), [modules/tester.py](modules/tester.py) | Reads the XML with its line numbers, checks it, then builds it with the py_trees XML parser. Nothing physical: only whether the tree can be built and follows the grammar. |
-| Semantic judge | [modules/judge.py](modules/judge.py) | Fills in the judgement form: accept or reject, the problems in its own words, and why. On a rejection that form becomes the generator's feedback. |
-| Generation loop | [modules/loop.py](modules/loop.py), [modules/loop_stage.py](modules/loop_stage.py) | Runs the three above until a tree is accepted or a cap is reached, and keeps every attempt's files apart. |
+| Semantic judge | [modules/judge.py](modules/judge.py) | Only in Static creator & Dynamic judge. Fills in the judgement form: accept or reject, the problems in its own words, and why. On a rejection that form becomes the generator's feedback. |
+| Generation loop | [modules/loop.py](modules/loop.py), [modules/loop_stage.py](modules/loop_stage.py) | Reads the mode ([modules/modes.py](modules/modes.py)), then runs the three above until a tree is accepted or a cap is reached, and keeps every attempt's files apart. |
 | Tree graph | [modules/graph.py](modules/graph.py) | Lays the tree out once and draws it on the canvas, to a PNG and to a `.dot` file. |
 
 The generator, the syntax check and the judge are not separate panels in the window: they
@@ -285,12 +299,13 @@ only a tree that passes is handed to the parser.
 
 ## Generic trees: find and check nodes
 
-The generator writes **generic** trees: the same tree does the task on any table. It is
-not shown the scene's objects and never names one. Instead the tree describes the objects
+The generator writes **generic** trees, in every mode: the same tree does the task on any
+table. It never names an object; the Static creator is not even shown them, and the
+Dynamic creator is shown them only to check its tree against today's table. Instead the tree describes the objects
 it needs by what the robot perceives, finds them while it runs, and the rest of the tree
 refers to them through the blackboard.
 
-**Perception properties** ([prompts/perception.txt](prompts/perception.txt), and the same
+**Perception properties** ([prompts/shared/perception.txt](prompts/shared/perception.txt), and the same
 lists in [config.py](config.py)):
 
 | Property | Values | Setting |
@@ -334,11 +349,11 @@ ends in a branch made only of inverted conditions.
 after an action, so an object is found right before it is used. A key must only be stored
 before it is used, in the order the tree runs.
 
-**Only the judge sees the scene.** It is shown the scene's objects, so it can work out what
-each find node finds on this table, and it is asked whether the tree's logic would also be
-right on other tables. Its reason must not list the objects or their ids, so the
-generator's tree stays generic. Keep enrichment off for these runs: enrichment rewrites the
-command with the scene's object names.
+**Who sees the scene.** In Static creator & Dynamic judge only the judge sees the scene's
+objects, so it can work out what each find node finds on this table. Its reason must not
+list the objects or their ids, so the creator's tree stays generic. In Dynamic creator
+the creator sees them, and its prompt tells it never to write their ids. In every mode
+the syntax check refuses a tree that names an object.
 
 **A known limit.** There is no "the same property as another object" relation. A command
 like "put each block in the box of the matching colour" makes the generator write one
@@ -400,81 +415,71 @@ Each part has exactly one job, and they are deliberately kept apart.
 
 | Part | Decides | Does not |
 |---|---|---|
-| Enrichment | Which scene object the user's words mean. | |
-| Generator | What the command says to do, and in what order. | Whether the plan is safe, complete or well ordered. |
+| Generator | What the command says to do, and in what order. **In the Dynamic creator mode** also whether the plan is physically possible: it adds the steps the physical facts make necessary, since nothing checks its tree. | In the two Static modes: whether the plan is safe, complete or well ordered. |
 | Syntax check | Whether the XML can be built, uses only the grammar, and stores every key before it is used. | What the tree means. No physical rules. |
-| Semantic judge | Whether the tree does what the user asked, in a physically possible way. | Write or repair trees. Judge node names or style. |
+| Semantic judge (Static creator & Dynamic judge only) | Whether the tree does what the user asked, in a physically possible way. | Write or repair trees. Judge node names or style. |
 | Mock world | What happens on the table when the tree runs: what is found, what is refused, what goes wrong. | Whether the run was the right thing to do. |
 
-A generator that shakes an open test tube because the command never mentioned a cap is
-**intended**: the judge catches it and the loop repairs it. That split is the point of the
-design: mistakes have to be able to reach the judge, so the generator is not allowed to
-prevent them.
+A Static creator that shakes an open test tube because the command never mentioned a cap
+is **intended**: in Static creator & Dynamic judge the judge catches it and the loop
+repairs it, and in Static creator nothing does, which is what that mode measures. That
+split is the point of the design: mistakes have to be able to reach the judge, so the
+Static creator is not allowed to prevent them. The Dynamic creator is the opposite set-up:
+the same knowledge, given to the creator instead.
 
 ---
 
-## What the "Enrich with the scene first" switch changes
+## The three modes
 
-Enrichment runs once, before the loop, and rewrites your command so it names the objects
-that are actually in the scene: "the red container" becomes "the red box". It is a
-separate model call with its own prompt; what reaches the stages after it is only the
-rewritten sentence.
+Every run is made in one mode, chosen with the selector under the command (the default is
+`DEFAULT_MODE` in [config.py](config.py)). The code is shared: one generator, one judge,
+one loop, one syntax check. A mode decides only which creator prompt is loaded and
+whether the judge is called ([modules/modes.py](modules/modes.py)). Each mode has its own
+folder in [modes/](modes/README.md), with its prompts and a README that says exactly what
+every model sees in it, with real messages from a run.
 
-**For the generator, nothing is added.** Its system prompt is identical either way. The
-command is *swapped*, not supplemented:
+| Mode id (code, folders, `summary.json`) | Title (window, README) | Creator sees | Judge |
+|---|---|---|---|
+| `static_creator` | Static creator | the command only | none |
+| `static_creator_dynamic_judge` | Static creator & Dynamic judge | the command only | sees the scene and the physical facts; up to 3 rounds |
+| `dynamic_creator` | Dynamic creator | the command, **the scene object list and the physical facts** | none |
 
-```
-Enrichment off →  COMMAND: Put the yellow block in the red container.
-Enrichment on  →  COMMAND: Place the yellow cuboid in the red box.
-```
+**Static creator** ([modes/static_creator/README.md](modes/static_creator/README.md)).
+The creator gets the command and the shared description of the robot, the perception,
+the grammar and the actions. A tree that fails the syntax check is sent back; the first
+one that passes is the result, final status `no_judge`. It shows what the creator
+produces on its own, including the mistakes a judge would catch. Running its tree in the
+Execution tab shows what those mistakes do on the table.
 
-The generator never learns that enrichment happened, or what you originally typed.
+**Static creator & Dynamic judge**
+([modes/static_creator_dynamic_judge/README.md](modes/static_creator_dynamic_judge/README.md)).
+The same creator prompt, word for word (its `creator_prompt.txt` is one include line of
+the Static creator's). Every tree that passes the syntax check goes to the judge, which
+sees the scene object list and the physical facts. A rejected tree goes back with the
+judge's errors and reason, up to three rejections.
 
-**For the judge, one line is added.** It always receives `ORIGINAL COMMAND:` with your own
-words, and gains a second line when enrichment ran *and changed the text*:
+**Dynamic creator** ([modes/dynamic_creator/README.md](modes/dynamic_creator/README.md)).
+The creator gets the scene object list and the physical facts as well, and is asked to
+make the tree physically possible itself and to check it against the scene. Nothing
+judges it; the loop is the Static creator's. Its trees are still generic: it must not
+name an object, and the syntax check refuses one.
 
-```
-ORIGINAL COMMAND:  Put the yellow block in the red container.
-REWRITTEN COMMAND: Place the yellow cuboid in the red box.
-BEHAVIOR TREE:
-...
-```
+Modes 1 and 2 differ only in the judge; modes 1 and 3 only in what the creator is given.
+Modes 2 and 3 differ in two things at once: where the knowledge sits and how many tries
+there are. [modes/README.md](modes/README.md) says how to compare them.
 
-The judge is the only part that sees both. The rewrite is another model's guess, so a
-wrong mapping is one of the mistakes the judge is there to catch, and its prompt tells it
-to judge against the original and treat the rewritten one as a hint. If the rewrite comes
-back unchanged, the line is left out.
+| | Static creator | Static creator & Dynamic judge | Dynamic creator |
+|---|---|---|---|
+| A failed syntax check | sent back with the errors, up to 3 trees | the same | the same |
+| A tree that passes the syntax check | **is the result** | goes to the judge | **is the result** |
+| A rejected tree | — | sent back with the judge's form | — |
+| Final status | `no_judge` or `failed_syntax_cap` | `accepted`, `failed_judge_cap`, `failed_syntax_cap`, `judge_error` | `no_judge` or `failed_syntax_cap` |
 
-**Keep enrichment off for generic trees.** It resolves the command against today's scene
-and puts the scene's object names into it, so the generator would no longer write a
-generic tree.
-
----
-
-## The baseline: Judge or Baseline
-
-The **Judge / Baseline** selector under the command turns the judge off. The baseline is
-what the judged runs are compared against, so everything before the judge stays identical:
-same scene, same enrichment, same generation prompt, same syntax check.
-
-With the judge off the syntax repair still runs: a tree that fails the syntax check is sent
-back to the generator with the errors, exactly as in a judged run. The only thing missing
-is the judge.
-
-| | Judge | Baseline |
-|---|---|---|
-| A failed syntax check | sent back with the errors, up to 3 trees | the same |
-| A tree that passes the syntax check | goes to the judge | **is the result** |
-| A rejected tree | sent back with the judge's form | — |
-| Generator calls | up to 3 syntax failures and up to 3 rejections | up to 3, all for syntax failures |
-| Final status | `accepted`, `failed_judge_cap`, `failed_syntax_cap`, `judge_error` | `no_judge` or `failed_syntax_cap` |
-
-So a baseline run shows what the generator produces once its tree can be built, including
-the mistakes the judge would have caught. Running a baseline tree in the Execution tab
-shows what those mistakes do on the table.
-
-`summary.json` records `loop.judge_enabled` for every run. The default is `JUDGE_ENABLED`
-in [config.py](config.py); the selector overrides it per run.
+`summary.json` records the mode as `mode` (the id) and `loop.mode` (`{"id", "title"}`).
+Runs made before the modes are listed as the mode they match, with "(old run)": their
+`loop.judge_enabled` false is Static creator, true or missing is Static creator & Dynamic
+judge. Many of them first rewrote the command with the scene's object names (an
+enrichment stage that has since been removed), so they are not exactly the new mode.
 
 ---
 
@@ -487,8 +492,9 @@ in [config.py](config.py); the selector overrides it per run.
 2. Take the XML out of the reply (`extract_xml()`). No XML at all counts as a syntax
    failure, and the generator is asked again.
 3. Run the syntax check. On failure, send the errors back (step 1).
-4. Baseline: stop here; the tree is the result (`no_judge`).
-5. Judge: send the judge the command, the tree as an outline, and its own earlier
+4. A mode without a judge (Static creator, Dynamic creator): stop here; the tree is the
+   result (`no_judge`).
+5. Static creator & Dynamic judge: send the judge the command, the tree as an outline, and its own earlier
    judgements. A reply that is not a valid form is asked again, up to
    `JUDGE_FORMAT_RETRIES` times.
 6. `accept` → the run ends (`accepted`). `reject` → the form goes back to the generator
@@ -507,7 +513,7 @@ Syntax failures do not count toward the judge cap.
 | Final status | Meaning |
 |---|---|
 | `accepted` | the judge accepted a tree; it is saved as `bt.xml` |
-| `no_judge` | baseline: the first tree that passed the syntax check; saved as `bt.xml` |
+| `no_judge` | a mode without a judge: the first tree that passed the syntax check; saved as `bt.xml` |
 | `failed_judge_cap` | the judge rejected 3 trees |
 | `failed_syntax_cap` | 3 trees (or replies without a tree) failed the syntax check |
 | `judge_error` | the judge never returned a valid form. **A judge that fails is never treated as an accept.** |
@@ -559,8 +565,8 @@ in the XML, and its name in brackets, children indented.
 
 ## What the generator is told when a tree comes back
 
-**The system prompt never changes.** On every attempt the generator gets the identical
-generation prompt. All the feedback goes into the **user message**:
+**The system prompt never changes.** On every attempt the generator gets its mode's
+identical creator prompt. All the feedback goes into the **user message**:
 
 ```
 COMMAND: shake the left test tube 3 times
@@ -580,7 +586,7 @@ Reason: ShakeLeftTube shakes the tube stored under tube while it is open and hol
 
 | Part | Where it comes from |
 |---|---|
-| `COMMAND:` | the same every attempt: the enriched command, or the typed one |
+| `COMMAND:` | the same every attempt: the command exactly as typed |
 | `PREVIOUS TREE:` | the exact XML of the tree that was sent back |
 | `Problems:` | the judge's `errors` phrases, verbatim |
 | `Reason:` | the judge's explanation, verbatim |
@@ -588,7 +594,8 @@ Reason: ShakeLeftTube shakes the tube stored under tube while it is open and hol
 The generator learns *what* is wrong and *why*, in the judge's words. It never sees the
 analysis, the JSON, or the judge's prompt.
 
-A failed syntax check uses the same shape, with `SYNTAX CHECK ERRORS:` in place of
+`REVIEWER FINDINGS:` only exist in Static creator & Dynamic judge. A failed syntax check,
+in every mode, uses the same shape, with `SYNTAX CHECK ERRORS:` in place of
 `REVIEWER FINDINGS:` and each blocking check listed with its line number. A reply that held
 no XML tree has no tree to send back, so it gets the demand alone:
 
@@ -623,8 +630,8 @@ Every attempt's results are saved in `attempts/NN/tester_report.json` and shown 
 Checks tab.
 
 There are **no physical rules here**. "A container holding liquid is closed before it is
-shaken" is the judge's to make, so a `Shake` without a `Close` passes this stage and
-reaches the judge.
+shaken" is the judge's to make (or, in the Dynamic creator mode, the creator's), so a
+`Shake` without a `Close` passes this stage.
 
 ---
 
@@ -784,7 +791,7 @@ There is one fault today: **`spill`**. Shaking an object that holds liquid and i
 closed sets `spilled = True` and returns
 `Outcome(action_happened=True, fault="spill", reason="<obj> was shaken while open and spilled")`.
 It follows the first physical fact in
-[prompts/judge_physical_facts.txt](prompts/judge_physical_facts.txt). Every fault is kept
+[prompts/shared/physical_facts.txt](prompts/shared/physical_facts.txt). Every fault is kept
 in the world's `faults` list for the whole run, and `snapshot()["faults"]` returns it. A
 spilled object still holds its liquid.
 
@@ -879,14 +886,18 @@ The terminal command around `execute()`. It reads the XML, builds a fresh mock w
 the scene, calls `execute()` and prints `format_trace()`.
 
 ```bash
-python run_tree.py --run data/runs/<run id>             # the run's bt.xml, on the run's scene
-python run_tree.py tree.xml --scene scene6              # any XML file, on the scene you name
-python run_tree.py --run data/runs/<run id> --step      # pause after every tick (Enter)
-python run_tree.py --run data/runs/<run id> --json out.json   # also save the full result
+python run_tree.py --run data/runs/<mode id>/<run id>  # the run's bt.xml, on the run's scene
+python run_tree.py --run <run id>                      # the same run, found by its id
+python run_tree.py --run data/runs/<run id>            # an old run, made before the modes
+python run_tree.py tree.xml --scene scene6             # any XML file, on the scene you name
+python run_tree.py --run <run id> --step               # pause after every tick (Enter)
+python run_tree.py --run <run id> --json out.json      # also save the full result
 ```
 
-- `--run` takes the tree from the run's `bt.xml` and the scene from its `summary.json`. A
-  run without an accepted tree has no `bt.xml`; run one of its attempts instead.
+- `--run` takes a run folder or a run id, finds the run in whichever mode folder it is
+  (or among the old runs, `RunContext.find()`), and takes the tree from its `bt.xml` and
+  the scene from its `summary.json`. A run without an accepted tree has no `bt.xml`; run
+  one of its attempts instead.
 - To run a particular attempt, give its `attempts/NN/tree.xml` with `--scene`.
 - In a terminal, refusals and faults are printed in red; written to a file or a pipe, the
   text has no colour codes.
@@ -951,22 +962,22 @@ in **SUCCESS** after 5 ticks. The judge missed this; running the tree shows it.
 
 ## What a run leaves behind
 
-Every run writes a folder named after its id, and **every attempt keeps its own folder**,
-so a repaired tree never overwrites the one it replaces:
+Every run writes a folder named after its id, inside its mode's folder, and **every attempt
+keeps its own folder**, so a repaired tree never overwrites the one it replaces. Run ids
+are unique across the modes.
 
 ```
-data/runs/2026-11-05_13-15-22_f873/
+data/runs/static_creator_dynamic_judge/2026-11-14_12-17-47_ddb0/
 ├── run.log                  every module together, in order
 ├── events.jsonl             the same records as JSON, one per line
 ├── logs/<module>.log        each module on its own
-├── summary.json             scene, command, models, efforts, the loop's status, counters,
-│                            every attempt with its judgement form, the caps, the times
+├── summary.json             scene, command, mode, models and their prompt files, efforts,
+│                            the loop's status, counters, every attempt with its judgement
+│                            form, the caps, the times
 ├── scene.jpg                the scene photo (shown in the window, not sent to the model)
-├── scene_objects.txt        the scene's object list (the judge's {scene_objects})
-├── scene_knowledge.json     the dictionary the enrichment was given
+├── scene_objects.txt        the scene's object list (the {scene_objects} of the judge and
+│                            the Dynamic creator)
 ├── command.txt              what was typed
-├── enrichment/              system_prompt.txt · user_message.txt · raw_reply.txt
-├── enriched_command.txt
 ├── attempts/
 │   ├── 01/
 │   │   ├── generation/          system_prompt.txt · user_message.txt · raw_reply.txt
@@ -976,19 +987,24 @@ data/runs/2026-11-05_13-15-22_f873/
 │   │   ├── judge/01/            one folder per judge call
 │   │   └── judge_form.json      the judgement form
 │   └── 02/ …                    the repair, and its own judgement
-├── bt.xml                   the accepted (or baseline) tree, with a comment saying where it came from
+├── bt.xml                   the resulting tree, with a comment: scene, mode, command, model
 ├── bt_graph.png             that tree as a picture, with its legend
 ├── bt_graph.dot             the same graph as DOT source
 └── bt_graph.json            the tree structure and the legend's notation lines, to redraw it
 ```
 
-Files that do not apply are missing: no `enrichment/` when enrichment is off, no `judge/`
-in a baseline run, no `bt.xml` when no tree was accepted. Running a tree writes nothing to
+Files that do not apply are missing: no `judge/`, `judge_outline.txt` or `judge_form.json`
+in a mode without a judge, no `bt.xml` when no tree was accepted. Running a tree writes nothing to
 the run folder; use `run_tree.py --json` to save a result.
 
 Each attempt in `summary.json` carries a `ground_truth` field, left `null` on purpose. It
 is filled in by hand with `"correct"` or `"faulty"`; without it the judge cannot be
 evaluated.
+
+Each mode folder has a `README.txt` saying which mode it is and pointing at
+`modes/<mode id>/README.md`. Runs made before the modes are still directly in
+`data/runs/<run id>/`, untouched; some of them hold the files of the old enrichment stage
+(`enrichment/`, `enriched_command.txt`, `scene_knowledge.json`).
 
 Any past run can be reopened from the run menu at the top right of the window, and the
 **Attempt** menu switches every tab between that run's attempts.
@@ -1052,40 +1068,58 @@ Without it nothing is lost: the PNG and the canvas do not need graphviz.
 
 ## The prompts
 
-The prompts are in [prompts](prompts). The parts both models read live in their own
-files, and the main prompts include them:
+Each mode's prompts are in its folder under [modes](modes/README.md); the parts more than
+one mode includes are in [prompts/shared](prompts/shared):
 
 ```
+modes/
+├── static_creator/
+│   └── creator_prompt.txt          {{include: ../../prompts/shared/robot_and_workspace.txt}}
+│                                   {{include: ../../prompts/shared/perception.txt}}
+│                                   {{include: ../../prompts/shared/generic_actions.txt}}
+├── static_creator_dynamic_judge/
+│   ├── creator_prompt.txt          {{include: ../static_creator/creator_prompt.txt}}
+│   └── judge_prompt.txt            {{include: …/robot_and_workspace.txt}}
+│                                   {{include: …/perception.txt}}
+│                                   {scene_objects}
+│                                   {{include: …/generic_actions.txt}}
+│                                   {{include: …/physical_facts.txt}}
+└── dynamic_creator/
+    └── creator_prompt.txt          {{include: …/robot_and_workspace.txt}}
+                                    {{include: …/perception.txt}}
+                                    {scene_objects}
+                                    {{include: …/generic_actions.txt}}
+                                    {{include: …/physical_facts.txt}}
 prompts/
-├── bt_generation_prompt.txt     {{include: robot_and_workspace.txt}}
-│                                {{include: perception.txt}}
-│                                {{include: generic_actions.txt}}
-├── semantic_judge_prompt.txt    {{include: robot_and_workspace.txt}}
-│                                {{include: perception.txt}}
-│                                {scene_objects}
-│                                {{include: generic_actions.txt}}
-│                                {{include: judge_physical_facts.txt}}
-├── robot_and_workspace.txt      the robot and the axes, shared by both prompts
-├── perception.txt               what the robot perceives, shared by both prompts
-├── generic_actions.txt          the four actions with {key} references, shared by both prompts
-├── judge_physical_facts.txt     the facts a tree must respect, for the judge only
-└── actions.txt                  the four actions with object ids (from the older,
-                                 non-generic trees; not used now)
+├── shared/
+│   ├── robot_and_workspace.txt     the robot and the axes
+│   ├── perception.txt              what the robot perceives
+│   ├── generic_actions.txt         the four actions with {key} references
+│   └── physical_facts.txt          the facts a tree must respect (the judge and the
+│                                   Dynamic creator)
+└── actions.txt                     the four actions with object ids (from the older,
+                                    non-generic trees; not used now)
 ```
 
 A line `{{include: file.txt}}` is replaced by that file's text when the prompt is loaded
 (`load_prompt()` in [modules/prompt_files.py](modules/prompt_files.py)), so the model
 receives one continuous prompt. The path is relative to the file that contains the line.
 `{scene_objects}` is filled with `str.replace`, never `str.format`, because the prompts
-contain braces.
+contain braces. `BTGenerator.system_prompt()` checks the placeholder against the mode: a
+Static creator prompt with `{scene_objects}`, or a Dynamic creator prompt without it, is a
+`StageError`, so a run never quietly gives the wrong creator the scene.
 
-The generator has no physical-facts file on purpose: it only translates, and physical
-rules belong to the judge. The generation prompt adds its own sections on the XML format,
-the decorators and how to build a tree. The judge prompt explains how to read the tree
-outline: how find nodes order objects, `FindOne`'s `nth`, `FindAll`'s `limit`, `HasCount`'s
-`comparison`, and what each decorator does.
+The Static creator has no physical-facts file on purpose: it only translates, and in its
+judged mode the physical rules belong to the judge. The Dynamic creator's prompt is the
+Static creator's with five changes, and nothing else: the generic paragraph (it is shown
+the table to check its tree), the job paragraph (make the tree physically possible;
+nobody checks it after you), the Scene and Physical facts sections, the rule on
+describing objects (add the properties the physical facts make necessary, such as
+`graspable="True"`), and no reviewer findings in the follow-up messages. The judge prompt
+explains how to read the tree outline: how find nodes order objects, `FindOne`'s `nth`,
+`FindAll`'s `limit`, `HasCount`'s `comparison`, and what each decorator does.
 
-**The physical facts** ([prompts/judge_physical_facts.txt](prompts/judge_physical_facts.txt)):
+**The physical facts** ([prompts/shared/physical_facts.txt](prompts/shared/physical_facts.txt)):
 a container that holds liquid spills when shaken while open, so it must be closed first;
 nothing can be poured into a closed container, so a container is filled before it is
 closed; objects that hold or support others are fixed; one cap closes one container. The
@@ -1106,18 +1140,17 @@ colour and name (`yellow_bowl`), with a number only when two would collide
 (`red_cuboid_1`, `red_cuboid_2`, numbered left to right). Objects whose name is in
 `SUPPORT_OBJECTS` get the role `valid location`; the rest are `graspable`.
 
-The scenes, their photos and the enrichment prompts are read from the contextual-asr
+The scenes, their photos, the name CSVs and the API key are read from the contextual-asr
 project beside this one:
 
 ```
 Contextual-asr/
-├── contextual-asr/contextual-asr/prompt/   ← scenes, photos and enrichment prompts
+├── contextual-asr/contextual-asr/prompt/   ← scenes, photos and name CSVs
 └── pipeline/                               ← this repository
 ```
 
 Nothing is duplicated. If you clone this repository on its own, point `CONTEXTUAL_ASR_DIR`
-in [config.py](config.py) at that project, or copy `prompt/workspace_knowledge` and the five
-enrichment `.txt` files next to it.
+in [config.py](config.py) at that project, or copy `prompt/workspace_knowledge` next to it.
 
 ---
 
@@ -1126,43 +1159,39 @@ enrichment `.txt` files next to it.
 All model stages work from text alone. The photo is still loaded and shown in the window,
 and still copied into the run folder; it is simply not part of any request.
 
-The contextual-asr enrichment prompt promises the model a picture in three places, so when
-the photo is not sent those sentences are removed from the assembled prompt
-(`without_image_references()` in [modules/enrichment.py](modules/enrichment.py)). The
-prompt *files* are left untouched, since contextual-asr shares them.
-
-To send it again, set `ENRICHMENT_SEND_SCENE_IMAGE` and `BT_GENERATION_SEND_SCENE_IMAGE`
-(and `JUDGE_SEND_SCENE_IMAGE`) back to `True` in [config.py](config.py); the removed
-sentences come back with them.
+To send it again, set `BT_GENERATION_SEND_SCENE_IMAGE` and `JUDGE_SEND_SCENE_IMAGE` to
+`True` in [config.py](config.py). The prompts do not mention a photo, so they would need a
+sentence about it.
 
 ---
 
 ## Settings
 
-All in [config.py](config.py). The window's menus override the models, the efforts, the
-judge mode and enrichment per run.
+All in [config.py](config.py). The window's menus override the mode, the models and the
+efforts per run.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `CONTEXTUAL_ASR_DIR` and the paths under it | `../contextual-asr/contextual-asr` | where the scenes, the CSVs and the enrichment prompts are read from |
-| `BT_GENERATION_PROMPT_FILE`, `SEMANTIC_JUDGE_PROMPT_FILE` | `prompts/…` | the two main prompts |
+| `CONTEXTUAL_ASR_DIR` and the paths under it | `../contextual-asr/contextual-asr` | where the scenes and the CSVs are read from |
+| `MODES_DIR` | `modes` | one folder per mode, with its prompts (see [modules/modes.py](modules/modes.py)) |
+| `SHARED_PROMPTS_DIR` | `prompts/shared` | the prompt parts more than one mode includes |
+| `DEFAULT_MODE` | `static_creator_dynamic_judge` | the mode when the window or the payload does not choose one |
 | `API_KEY_FILE` | `contextual-asr/…/API_KEY.txt` | the key, when `OPENAI_API_KEY` is not set |
-| `RUNS_DIR`, `LOG_DIR` | `data/runs`, `data/logs` | where runs and logs are written |
+| `RUNS_DIR`, `LOG_DIR` | `data/runs`, `data/logs` | where runs (in `<mode id>/<run id>/`) and logs are written |
 | `SCENES` | the nine scenes | the scene menu |
 | `SUPPORT_OBJECTS` | box, crate, bowl, palette, container, mortar, test tube holder, foam test tube holder | objects that hold or support others: never graspable |
-| `ENRICHMENT_MODEL`, `BT_GENERATION_MODEL`, `JUDGE_MODEL` | `gpt-4o` | the three models |
-| `ENRICHMENT_TEMPERATURE`, `BT_GENERATION_TEMPERATURE`, `JUDGE_TEMPERATURE` | 0 | dropped automatically for a model that refuses it |
-| `ENRICHMENT_SEND_SCENE_IMAGE`, `BT_GENERATION_SEND_SCENE_IMAGE`, `JUDGE_SEND_SCENE_IMAGE` | `False` | send the photo with the request |
+| `BT_GENERATION_MODEL`, `JUDGE_MODEL` | `gpt-4o` | the two models |
+| `BT_GENERATION_TEMPERATURE`, `JUDGE_TEMPERATURE` | 0 | dropped automatically for a model that refuses it |
+| `BT_GENERATION_SEND_SCENE_IMAGE`, `JUDGE_SEND_SCENE_IMAGE` | `False` | send the photo with the request |
 | `JUDGE_USE_STRUCTURED_OUTPUT` | `True` | ask the judge for the JSON schema |
-| `JUDGE_ENABLED` | `True` | Judge (True) or Baseline (False), when the window does not say |
 | `GRAMMAR_DECORATORS` | ForEach, Inverter, Retry, Repeat, Timeout, FailureIsSuccess | the decorators the prompt allows and the check accepts |
-| `PERCEPTION_TYPES`, `PERCEPTION_COLOR_PROPERTIES`, `PERCEPTION_BOOLEAN_PROPERTIES` | see [the perception properties](#generic-trees-find-and-check-nodes) | must match `prompts/perception.txt` |
+| `PERCEPTION_TYPES`, `PERCEPTION_COLOR_PROPERTIES`, `PERCEPTION_BOOLEAN_PROPERTIES` | see [the perception properties](#generic-trees-find-and-check-nodes) | must match `prompts/shared/perception.txt` |
 | `FIND_POSITIONS` | leftmost, rightmost, nearest, farthest | the `position` values |
 | `HAS_COUNT_COMPARISONS` | exactly, at least, at most | the `comparison` values |
 | `AVAILABLE_MODELS` | gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-5, gpt-6-luna | the model menus |
 | `RESPONSES_API_MODELS` | `{'gpt-6-luna'}` | models called through the Responses API, with a reasoning effort and no temperature |
 | `REASONING_EFFORTS` | low, medium, high | the effort menus |
-| `ENRICHMENT_REASONING_EFFORT`, `BT_GENERATION_REASONING_EFFORT`, `JUDGE_REASONING_EFFORT` | medium | the defaults (the enrichment has no menu) |
+| `BT_GENERATION_REASONING_EFFORT`, `JUDGE_REASONING_EFFORT` | medium | the defaults of the effort menus |
 | `SYNTAX_FAILURE_LIMIT` | 3 | see [the caps](#the-generation-loop-its-caps-and-how-a-run-ends) |
 | `JUDGE_REJECTION_LIMIT` | 3 | see the caps |
 | `JUDGE_FORMAT_RETRIES` | 2 | see the caps |
@@ -1188,7 +1217,7 @@ receives an effort. The effort that was sent is recorded in `summary.json`.
   `LOG_BACKUP_COUNT` days kept. `error.log` alone tells you everything that has ever broken.
 - **Per run**, in the run folder: `run.log`, `events.jsonl` and `logs/<module>.log`.
 - **In the window**: the log pane along the bottom, filterable by module (pipeline, scene,
-  command, enrichment, generator, tester, judge, loop, graph, gui) and level.
+  command, generator, tester, judge, loop, graph, gui) and level.
 
 ---
 
@@ -1198,14 +1227,16 @@ receives an effort. The effort that was sent is recorded in `summary.json`.
 python -m pytest tests -q
 ```
 
-No test calls a model: the loop is driven with scripted replies. 272 tests:
+No test calls a model: the loop is driven with scripted replies. 302 tests:
 
 | File | Tests | What it covers |
 |---|---|---|
-| [tests/test_loop.py](tests/test_loop.py) | 30 | the real loop with scripted replies and the real syntax check: acceptance, repair after a rejection or a syntax failure, each cap, a reply with no tree, invalid judgement forms, the baseline, one folder per attempt, the judge's earlier judgements, and the form's validation |
+| [tests/test_loop.py](tests/test_loop.py) | 36 | the real loop with scripted replies and the real syntax check: acceptance, repair after a rejection or a syntax failure, each cap, a reply with no tree, invalid judgement forms, the modes without a judge, one folder per attempt, the judge's message and earlier judgements, and the form's validation |
+| [tests/test_modes.py](tests/test_modes.py) | 15 | the three modes; what each creator and the judge are shown on scene8; the placeholder check in both directions; the mode in the summary |
+| [tests/test_run_context.py](tests/test_run_context.py) | 6 | runs in their mode folder, old flat runs listed with their mode, finding a run by id or folder, `run_tree.py --run` on a mode folder |
 | [tests/test_xml_tree.py](tests/test_xml_tree.py) | 57 | reading, checking and building XML trees: every check group, line numbers, the grammar, generic trees |
 | [tests/test_graph.py](tests/test_graph.py) | 23 | node kinds, the layout, the legend and its notation lines, braces on read keys, the PNG, DOT and JSON |
-| [tests/test_prompt_files.py](tests/test_prompt_files.py) | 11 | includes, and that the prompts and `config.py` agree |
+| [tests/test_prompt_files.py](tests/test_prompt_files.py) | 14 | includes, that the two Static creator prompts are identical, and that the prompts and `config.py` agree |
 | [tests/test_llm_responses.py](tests/test_llm_responses.py) | 7 | the Responses API path: efforts, no temperature |
 | [tests/test_world.py](tests/test_world.py) | 3 | the world interface |
 | [tests/test_mock_world.py](tests/test_mock_world.py) | 65 | finding, loose colours, ordering and ties, every action rule, faults, events, every real scene |
@@ -1249,6 +1280,7 @@ Each step of the work is on its own branch, each one built on the one before:
 | `mock-world` | the world interface, the mock world, `update/SCENES.md` |
 | `executor` | the nodes act on a world, the executor, `run_tree.py` |
 | `execution-tab` | the Execution tab, the legend's notation, braces on read keys, `action_happened`, done/refused |
+| `three-modes` | enrichment removed; the three modes, each with its prompt folder, README and run folder |
 
 ---
 
@@ -1266,4 +1298,8 @@ Each step of the work is on its own branch, each one built on the one before:
   gives that colour, not `mixed`.
 - **Running is not part of a pipeline run.** The executor's result is not saved in the run
   folder, and nothing fills `ground_truth` from it.
+- **Modes 2 and 3 differ in two things at once**: where the knowledge sits and how many
+  tries there are (see [modes/README.md](modes/README.md)).
+- **Old runs are not exactly a mode.** Many of them rewrote the command first with the
+  removed enrichment stage.
 - **Unity is not connected.** It will be another `World`; the nodes will not change.
