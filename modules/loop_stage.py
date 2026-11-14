@@ -197,6 +197,7 @@ class GenerationLoopStage(Stage):
             detail[f'attempt {attempt["n"]}'] = self._attempt_line(
                 attempt, payload.get('judge') is not None)
 
+        summary = f'{payload["mode_title"]}: {summary}'
         succeeded = status in SUCCESS
         return self.result(
             StageStatus.PASSED if succeeded else StageStatus.FAILED,

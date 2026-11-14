@@ -19,13 +19,13 @@ from PIL import Image
 import config
 from core import logging_setup
 from core.pipeline import Check, Pipeline, StageResult, StageStatus
-from core.run_context import RunContext
+from core.run_context import RunContext, mode_of_summary
 from gui.execution_view import ExecutionView
 from gui.graph_view import GraphView
 from gui.log_view import LogView
 from gui.stage_panel import CheckTable, StagePanel, open_path
 from modules import graph as graph_module
-from modules import loop
+from modules import loop, modes
 from modules.command import CommandStage
 from modules.graph import TreeGraphStage
 from modules.loop_stage import GenerationLoopStage
@@ -34,9 +34,16 @@ from modules.scene import SceneStage, load_scene
 MONOSPACE = ('Menlo', 11) if os.name != 'nt' else ('Consolas', 11)
 SCENE_IMAGE_WIDTH = 380
 
-# The two conditions the pipeline can run in.
-JUDGE_MODE = 'Judge'
-BASELINE_MODE = 'Baseline'
+# What the status line says a run in each mode will do.
+MODE_TEXT = {
+    'static_creator': 'The creator gets only the command. Syntax errors are repaired; the '
+                      'tree is not judged.',
+    'static_creator_dynamic_judge': 'The creator gets only the command. The judge sees '
+                                    'the scene and the physical facts and sends a '
+                                    'rejected tree back, up to three times.',
+    'dynamic_creator': 'The creator gets the command, the scene and the physical facts. '
+                       'Syntax errors are repaired; there is no judge.',
+}
 
 log = logging_setup.get_logger('gui')
 
@@ -120,7 +127,7 @@ class App(customtkinter.CTk):
         self.running = False
         self._attempts = []        # the attempts of the run on screen
         self._payload_png = None   # the saved image of the accepted tree
-        self._judged = True        # False when the run on screen was a baseline
+        self._run_mode = None      # the mode id of the run on screen
         self._run_scene = None     # the scene of the run on screen, for the Execution tab
         self._stored_runs = {}     # run menu label -> StoredRun
 
@@ -193,21 +200,18 @@ class App(customtkinter.CTk):
         self.command_box.grid(row=1, column=0, columnspan=3, padx=14, pady=(0, 8),
                               sticky='ew')
 
-        # The mode selector and Run share one row and the model menus get the row below:
-        # side by side they need more width than the column has on a laptop screen, and
-        # grid then shrinks the selector to nothing and draws the menus over them.
-        switches = customtkinter.CTkFrame(box, fg_color='transparent')
-        switches.grid(row=2, column=0, padx=14, pady=(0, 8), sticky='w')
-
-        # Judge: the loop also repairs a rejected tree. Baseline: syntax repairs only, no judge.
+        # The mode gets a row of its own, and the model menus share the row below with
+        # Run: the three titles side by side need most of the column's width on a laptop
+        # screen, and grid would otherwise shrink the selector and draw the menus over it.
         self.mode_selector = customtkinter.CTkSegmentedButton(
-            switches, values=[JUDGE_MODE, BASELINE_MODE], font=('Arial', 11),
+            box, values=[mode.title for mode in modes.MODES.values()], font=('Arial', 11),
             command=self.mode_changed)
-        self.mode_selector.set(JUDGE_MODE)
-        self.mode_selector.grid(row=0, column=0, sticky='w')
+        self.mode_selector.set(modes.get(config.DEFAULT_MODE).title)
+        self.mode_selector.grid(row=2, column=0, columnspan=2, padx=14, pady=(0, 8),
+                                sticky='w')
 
         models = customtkinter.CTkFrame(box, fg_color='transparent')
-        models.grid(row=3, column=0, columnspan=2, padx=14, pady=(0, 12), sticky='w')
+        models.grid(row=3, column=0, padx=14, pady=(0, 12), sticky='w')
 
         customtkinter.CTkLabel(models, text='tree', text_color='gray60',
                                font=('Arial', 10)).grid(row=0, column=0, padx=(0, 4))
@@ -244,12 +248,12 @@ class App(customtkinter.CTk):
             font=('Arial', 11))
         self.judge_effort_menu.set(config.JUDGE_REASONING_EFFORT)
         self.judge_effort_menu.grid(row=1, column=3, pady=(6, 0))
-        self.models_changed()
+        self.mode_changed()
 
         self.run_button = customtkinter.CTkButton(
             box, text='Run pipeline', width=140, height=34, font=('Arial', 13, 'bold'),
             command=self.run_pipeline)
-        self.run_button.grid(row=2, column=1, padx=(6, 14), pady=(0, 8))
+        self.run_button.grid(row=3, column=1, padx=(6, 14), pady=(0, 12), sticky='se')
 
         # One panel per module.
         panels = customtkinter.CTkScrollableFrame(column, label_text='Pipeline modules',
@@ -313,8 +317,10 @@ class App(customtkinter.CTk):
     # --- Running --------------------------------------------------------
 
     @property
-    def judging(self):
-        return self.mode_selector.get() == JUDGE_MODE
+    def mode(self):
+        """The mode chosen in the selector."""
+        title = self.mode_selector.get()
+        return next(mode for mode in modes.MODES.values() if mode.title == title)
 
     def models_changed(self, _model=None):
         """Enable an effort menu only for a model that takes a reasoning effort."""
@@ -322,19 +328,15 @@ class App(customtkinter.CTk):
         self.effort_menu.configure(
             state='normal' if self.model_menu.get() in takes_effort else 'disabled')
         self.judge_effort_menu.configure(
-            state='normal' if self.judging and self.judge_menu.get() in takes_effort
+            state='normal' if self.mode.uses_judge and self.judge_menu.get() in takes_effort
             else 'disabled')
 
-    def mode_changed(self, mode):
-        """Grey out the judge model in baseline, and say what the run will do."""
-        self.judge_menu.configure(state='normal' if self.judging else 'disabled')
+    def mode_changed(self, _title=None):
+        """Grey out the judge's menus in a mode without one, and say what the run will do."""
+        mode = self.mode
+        self.judge_menu.configure(state='normal' if mode.uses_judge else 'disabled')
         self.models_changed()
-        if mode == JUDGE_MODE:
-            self.status('Judge: a rejected tree is sent back for repair, up to three.')
-        else:
-            self.status('Baseline: a tree that fails the syntax check is repaired, but '
-                        'the tree that runs is not judged.',
-                        warn=True)
+        self.status(f'{mode.title}: {MODE_TEXT[mode.id]}')
 
     def _scene_changed(self, scene_number):
         self.status(f'Scene {scene_number} loaded. Type a command and run the pipeline.')
@@ -360,7 +362,7 @@ class App(customtkinter.CTk):
         self.check_table.show([])
         self.execution_view.unavailable('Wait for the pipeline run to finish.')
 
-        mode = 'static_creator_dynamic_judge' if self.judging else 'static_creator'
+        mode = self.mode.id
         self.context = RunContext(scene=scene, mode=mode)
         self.payload = {
             'scene': scene,
@@ -374,7 +376,7 @@ class App(customtkinter.CTk):
         self.running = True
         self.run_button.configure(state='disabled', text='Running…')
         self.folder_button.configure(state='normal')
-        self.status(f'Run {self.context.run_id} started.')
+        self.status(f'Run {self.context.run_id} started ({self.mode.title}).')
 
         threading.Thread(target=self._run, args=(selected,), daemon=True).start()
 
@@ -415,8 +417,9 @@ class App(customtkinter.CTk):
             if failed[0] == 'loop' and record.get('status') == 'failed_syntax_cap':
                 self.tabs.set('Checks')
         elif record.get('status') == 'no_judge':
-            self.status(f'Baseline: the tree was built and checked, but nothing judged '
-                        f'it. Everything is in {self.context.directory.name}.')
+            self.status(f'{modes.get(self.payload["mode"]).title}: the tree was built and '
+                        f'checked; this mode has no judge. Everything is in '
+                        f'{self.context.directory.name}.')
         else:
             attempts = len(record.get('attempts', []))
             self.status(f'Accepted after {attempts} attempt'
@@ -425,12 +428,17 @@ class App(customtkinter.CTk):
 
     # --- Showing one attempt --------------------------------------------
 
+    @property
+    def _run_has_judge(self):
+        """Whether the run on screen was made in a mode with a judge."""
+        return self._run_mode is None or modes.get(self._run_mode).uses_judge
+
     def _show_outputs(self, payload):
         """Fill the attempt selector and show the one that decided the run."""
         record = payload.get('loop_record') or {}
         self._attempts = list(record.get('attempts', []))
         self._payload_png = payload.get('graph_png')
-        self._judged = record.get('status') != 'no_judge'
+        self._run_mode = payload.get('mode')
         self._run_scene = payload.get('scene')
 
         if not self._attempts:
@@ -456,7 +464,7 @@ class App(customtkinter.CTk):
             return f'{n} · syntax failed'
         form = attempt.get('judge_form')
         if form is None:
-            return f'{n} · not judged' if not self._judged else f'{n} · no judgement'
+            return f'{n} · not judged' if not self._run_has_judge else f'{n} · no judgement'
         return f'{n} · judge {form["verdict"]}ed'
 
     def show_attempt(self, label):
@@ -479,7 +487,7 @@ class App(customtkinter.CTk):
 
         self._set_code(attempt.get('code') or '')
         self.check_table.show(attempt.get('checks', []))
-        self._set_judge(self._judgement_text(attempt, self._judged))
+        self._set_judge(self._judgement_text(attempt, self._run_has_judge))
 
         tree = attempt.get('tree')
         if tree is not None:
@@ -503,9 +511,7 @@ class App(customtkinter.CTk):
         lines = []
         if form is None:
             if not judged:
-                lines.append('Baseline run: the judge was switched off, so this tree '
-                             'was built and checked but nothing decided whether it is '
-                             'right.')
+                lines.append('This mode has no judge.')
             elif attempt.get('syntax_passed') is False:
                 lines.append('The syntax check failed, so the judge was never asked.')
             else:
@@ -522,7 +528,7 @@ class App(customtkinter.CTk):
                 lines += [f'  · {sentence}' for sentence in loop.form_sentences(form)]
             if form['reason']:
                 lines += ['', 'Reason:', form['reason']]
-        if attempt.get('outline'):
+        if attempt.get('outline') and judged:
             lines += ['', 'The tree the judge was shown:', '', attempt['outline']]
         return '\n'.join(lines)
 
@@ -551,7 +557,7 @@ class App(customtkinter.CTk):
         stored = loop_summary.get('attempts') or []
         self._attempts = []
         self._payload_png = directory / 'bt_graph.png'
-        self._judged = loop_summary.get('status') != 'no_judge'
+        self._run_mode = mode_of_summary(summary)
         self._run_scene = summary.get('scene')
 
         for entry in stored:
