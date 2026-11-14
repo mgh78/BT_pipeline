@@ -1,6 +1,8 @@
 """The semantic judge: does this tree do what the user asked, in a way the robot can?
 
-It runs after every tree that passes the syntax check. It fills in the judgement form -
+Only the Static creator & Dynamic judge mode has one (modules/modes.py), and its prompt
+is that mode's judge_prompt.txt. It runs after every tree that passes the syntax check.
+It fills in the judgement form -
 accept or reject, which problems there are in its own words, and why - and on a
 rejection that form goes back to the generator as the feedback for the next tree.
 
@@ -14,7 +16,7 @@ It never writes or repairs a tree, and a judge that fails is never treated as an
 
 import config
 from core import logging_setup
-from modules import llm, loop
+from modules import llm, loop, modes
 from modules.prompt_files import load_prompt
 
 log = logging_setup.get_logger('judge')
@@ -26,8 +28,11 @@ class SemanticJudge:
     name = 'judge'
     title = 'Semantic judge'
 
-    def __init__(self, model=None, temperature=None, use_structured_output=None,
+    def __init__(self, mode, model=None, temperature=None, use_structured_output=None,
                  reasoning_effort=None):
+        if not mode.uses_judge:
+            raise ValueError(f'The {mode.title} mode has no judge.')
+        self.mode = mode
         self.model = model or config.JUDGE_MODEL
         self.reasoning_effort = reasoning_effort or config.JUDGE_REASONING_EFFORT
         self.temperature = (config.JUDGE_TEMPERATURE if temperature is None
@@ -42,7 +47,7 @@ class SemanticJudge:
         Filled with ``str.replace``: the prompt contains the literal braces of the
         judgement form, so ``str.format`` would break it.
         """
-        path = config.SEMANTIC_JUDGE_PROMPT_FILE
+        path = self.mode.judge_prompt
         prompt = load_prompt(path)
         if '{scene_objects}' not in prompt:
             self.log.warning('%s has no {scene_objects} placeholder — the judge will '
@@ -73,6 +78,7 @@ class SemanticJudge:
     def describe(self):
         """What is recorded about this judge in the run's summary."""
         return {'model': self.model,
+                'prompt': modes.relative(self.mode.judge_prompt),
                 'temperature': llm.temperature_for(self.model, self.temperature),
                 'reasoning_effort': llm.reasoning_effort_for(
                     self.model, self.reasoning_effort),

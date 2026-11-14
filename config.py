@@ -19,10 +19,11 @@ WORKSPACE_KNOWLEDGE_DIR = CONTEXTUAL_ASR_DIR / 'prompt' / 'workspace_knowledge'
 OBJECT_NORMALIZED_FILE = WORKSPACE_KNOWLEDGE_DIR / 'object_normalized.csv'
 COLOR_NORMALIZED_FILE = WORKSPACE_KNOWLEDGE_DIR / 'color_normalized.csv'
 
-# The behavior tree generation prompt is ours to edit, so it lives here.
-BT_GENERATION_PROMPT_FILE = PIPELINE_ROOT / 'modes' / 'static_creator' / 'creator_prompt.txt'
-SEMANTIC_JUDGE_PROMPT_FILE = (PIPELINE_ROOT / 'modes' / 'static_creator_dynamic_judge'
-                              / 'judge_prompt.txt')
+# The prompts are ours to edit, so they live here: each mode's own prompts in
+# modes/<mode id>/ (see modules/modes.py), and the parts more than one mode includes in
+# prompts/shared/.
+MODES_DIR = PIPELINE_ROOT / 'modes'
+SHARED_PROMPTS_DIR = PIPELINE_ROOT / 'prompts' / 'shared'
 
 # The API key file. The OPENAI_API_KEY environment variable takes precedence.
 API_KEY_FILE = CONTEXTUAL_ASR_DIR / 'API_KEY.txt'
@@ -61,11 +62,18 @@ JUDGE_TEMPERATURE = 0           # dropped automatically for a model that refuses
 JUDGE_SEND_SCENE_IMAGE = False  # keep equal to BT_GENERATION_SEND_SCENE_IMAGE
 JUDGE_USE_STRUCTURED_OUTPUT = True
 
-# Turning the judge off gives the baseline: the pipeline runs exactly as it does with
-# the judge, syntax repairs included, up to the point where the judge would decide, and
-# the first tree that passes the syntax check is the result. That is the condition the judged runs are
-# compared against, so nothing else about the run may differ.
-JUDGE_ENABLED = True
+# The mode a run is made in, unless the window or the payload chooses another:
+#   'static_creator'                the creator gets only the command; no judge.
+#   'static_creator_dynamic_judge'  the creator gets only the command; the judge sees the
+#                                   scene and the physical facts, up to three rounds.
+#   'dynamic_creator'               the creator gets the command, the scene and the
+#                                   physical facts; no judge.
+# The modes are built to be compared. Static creator and Static creator & Dynamic judge
+# differ only in the judge: the same creator prompt, the same loop and the same syntax
+# repairs, and without a judge the first tree that passes the syntax check is the result.
+# Static creator and Dynamic creator differ only in what the creator is given: the same
+# loop, and neither has a judge.
+DEFAULT_MODE = 'static_creator_dynamic_judge'
 
 # The behavior tree grammar: the decorators the generation prompt allows besides the four
 # actions, the four find/check nodes, Sequence and Selector. The generator writes the tree

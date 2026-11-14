@@ -17,13 +17,14 @@ import config  # noqa: E402
 from core.pipeline import StageError  # noqa: E402
 from modules.prompt_files import INCLUDE_PATTERN, load_prompt  # noqa: E402
 
-MODES = config.PIPELINE_ROOT / 'modes'
-SHARED = config.PIPELINE_ROOT / 'prompts' / 'shared'
+MODES = config.MODES_DIR
+SHARED = config.SHARED_PROMPTS_DIR
 STATIC_CREATOR = MODES / 'static_creator' / 'creator_prompt.txt'
 JUDGED_CREATOR = MODES / 'static_creator_dynamic_judge' / 'creator_prompt.txt'
 DYNAMIC_CREATOR = MODES / 'dynamic_creator' / 'creator_prompt.txt'
+JUDGE = MODES / 'static_creator_dynamic_judge' / 'judge_prompt.txt'
 MAIN_PROMPTS = [STATIC_CREATOR, JUDGED_CREATOR, DYNAMIC_CREATOR,
-                config.SEMANTIC_JUDGE_PROMPT_FILE]
+                JUDGE]
 
 
 def test_include_is_replaced_by_the_file(tmp_path):
@@ -61,7 +62,7 @@ def test_real_prompts_assemble_completely(path):
     text = load_prompt(path)
     assert not INCLUDE_PATTERN.search(text)
     # Only the judge and the Dynamic creator are shown the scene.
-    shown = path in (config.SEMANTIC_JUDGE_PROMPT_FILE, DYNAMIC_CREATOR)
+    shown = path in (JUDGE, DYNAMIC_CREATOR)
     assert ('{scene_objects}' in text) == shown
 
 
@@ -73,8 +74,8 @@ def test_both_static_creator_prompts_are_the_same_prompt():
 
 def test_both_prompts_include_the_shared_parts():
     folder = SHARED
-    generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
-    judge = load_prompt(config.SEMANTIC_JUDGE_PROMPT_FILE)
+    generation = load_prompt(STATIC_CREATOR)
+    judge = load_prompt(JUDGE)
     robot = (folder / 'robot_and_workspace.txt').read_text().rstrip('\n')
     assert robot in generation and robot in judge
     # Both read the generic actions, with {key} references.
@@ -86,7 +87,7 @@ def test_both_prompts_include_the_shared_parts():
 
 
 def test_the_generation_prompt_has_no_physical_facts():
-    generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
+    generation = load_prompt(STATIC_CREATOR)
     assert 'Place(name, obj, location)' in generation
     # The generator is not given physical rules; they belong to the judge.
     assert 'Physical facts' not in generation
@@ -102,7 +103,7 @@ def test_the_perception_vocabulary_in_the_config_is_in_the_prompt_file():
 
 
 def test_the_generation_prompt_asks_for_xml_and_every_decorator_of_the_config():
-    generation = load_prompt(config.BT_GENERATION_PROMPT_FILE)
+    generation = load_prompt(STATIC_CREATOR)
     assert '```xml' in generation and 'create_behavior_tree' not in generation
     assert '@' not in generation          # references are written {key} now
     for decorator in config.GRAMMAR_DECORATORS:
@@ -110,6 +111,6 @@ def test_the_generation_prompt_asks_for_xml_and_every_decorator_of_the_config():
 
 
 def test_the_has_count_comparisons_in_the_config_are_in_the_generation_prompt():
-    prompt = ' '.join(config.BT_GENERATION_PROMPT_FILE.read_text().split())
+    prompt = ' '.join(STATIC_CREATOR.read_text().split())
     for comparison in config.HAS_COUNT_COMPARISONS:
         assert f'"{comparison}"' in prompt, comparison

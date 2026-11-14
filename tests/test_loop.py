@@ -82,7 +82,8 @@ class Scripted:
         queue = self.judge if who == 'judge' else self.generator
         assert queue, f'the {who} was called more often than the script allows'
         reply = queue.pop(0)
-        self.calls.append({'who': who, 'tag': tag, 'message': text, 'reply': reply})
+        self.calls.append({'who': who, 'tag': tag, 'message': text, 'reply': reply,
+                           'system_prompt': system_prompt})
         return {'text': reply, 'usage': {}, 'seconds': 0.0, 'model': model,
                 'artifacts': {}}
 
@@ -95,13 +96,12 @@ def run(monkeypatch, tmp_path):
     """Run the real pipeline with scripted replies, in a throwaway run folder."""
     monkeypatch.setattr(config, 'RUNS_DIR', tmp_path / 'runs')
 
-    def go(generator_replies, judge_replies=(), judge_enabled=True):
+    def go(generator_replies, judge_replies=(), mode='static_creator_dynamic_judge'):
         scripted = Scripted(generator_replies, judge_replies)
         monkeypatch.setattr(llm, 'ask', scripted)
         pipeline = Pipeline([SceneStage(), CommandStage(), GenerationLoopStage()])
         context = RunContext(scene=SCENE)
-        payload = {'scene': SCENE, 'command': COMMAND,
-                   'judge_enabled': judge_enabled}
+        payload = {'scene': SCENE, 'command': COMMAND, 'mode': mode}
         pipeline.run(context, payload)
         return payload['loop_record'], scripted, context
 
@@ -203,7 +203,7 @@ def test_three_invalid_forms_end_the_run(run):
 
 def test_baseline_keeps_the_first_tree_unjudged(run):
     # The tree shakes an open tube, which the judge would reject. Nothing judges it.
-    record, scripted, _ = run([TREE_WITHOUT_CLOSE], judge_enabled=False)
+    record, scripted, _ = run([TREE_WITHOUT_CLOSE], mode='static_creator')
     assert record['status'] == 'no_judge'
     assert record['counts']['generator_calls'] == 1
     assert record['counts']['judge_calls'] == 0
@@ -213,7 +213,7 @@ def test_baseline_keeps_the_first_tree_unjudged(run):
 
 
 def test_baseline_repairs_a_syntax_failure(run):
-    record, scripted, _ = run([TREE_WITH_UNKNOWN_KEY, GOOD_TREE], judge_enabled=False)
+    record, scripted, _ = run([TREE_WITH_UNKNOWN_KEY, GOOD_TREE], mode='static_creator')
     assert record['status'] == 'no_judge'
     assert record['counts']['generator_calls'] == 2
     assert record['counts']['syntax_failures'] == 1
@@ -226,18 +226,49 @@ def test_baseline_repairs_a_syntax_failure(run):
 
 
 def test_baseline_asks_again_for_missing_code(run):
-    record, _, _ = run([NO_CODE, GOOD_TREE], judge_enabled=False)
+    record, _, _ = run([NO_CODE, GOOD_TREE], mode='static_creator')
     assert record['status'] == 'no_judge'
     assert record['counts']['generator_calls'] == 2
     assert record['attempts'][0]['kind'] == 'no_code'
 
 
 def test_three_syntax_failures_end_a_baseline_run(run):
-    record, scripted, _ = run([TREE_WITH_UNKNOWN_KEY] * 3, judge_enabled=False)
+    record, scripted, _ = run([TREE_WITH_UNKNOWN_KEY] * 3, mode='static_creator')
     assert record['status'] == 'failed_syntax_cap'
     assert record['counts']['generator_calls'] == 3
     assert record['counts']['syntax_failures'] == 3
     assert not scripted.messages('judge')
+
+
+# --- the two modes without a judge -------------------------------------------
+
+@pytest.mark.parametrize('mode', ['static_creator', 'dynamic_creator'])
+def test_a_mode_without_a_judge_never_calls_it(run, mode):
+    record, scripted, context = run([TREE_WITH_UNKNOWN_KEY, TREE_WITHOUT_CLOSE], mode=mode)
+    assert record['status'] == 'no_judge'
+    assert record['counts']['judge_calls'] == 0
+    assert not scripted.messages('judge')
+    # The syntax failure was still sent back for repair.
+    assert 'SYNTAX CHECK ERRORS:' in scripted.messages('generator')[1]
+    summary = json.loads((context.directory / 'summary.json').read_text())
+    assert summary['loop']['mode']['id'] == mode
+    assert summary['loop']['models']['judge'] is None
+    assert 'judge_enabled' not in summary['loop'] and 'enrichment' not in summary['loop']
+
+
+def test_only_the_dynamic_creator_is_shown_the_scene(run):
+    _, dynamic, _ = run([GOOD_TREE], mode='dynamic_creator')
+    _, static, _ = run([GOOD_TREE], mode='static_creator')
+    assert 'transparent_test_tube_1' in dynamic.calls[0]['system_prompt']
+    assert 'transparent_test_tube_1' not in static.calls[0]['system_prompt']
+
+
+def test_the_judged_mode_calls_the_judge(run):
+    record, scripted, context = run([GOOD_TREE], [ACCEPT])
+    assert record['status'] == 'accepted' and len(scripted.messages('judge')) == 1
+    summary = json.loads((context.directory / 'summary.json').read_text())
+    assert summary['loop']['mode'] == {'id': 'static_creator_dynamic_judge',
+                                       'title': 'Static creator & Dynamic judge'}
 
 
 # --- what the run leaves behind ----------------------------------------------

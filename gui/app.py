@@ -366,7 +366,8 @@ class App(customtkinter.CTk):
             'judge_model': self.judge_menu.get(),
             'generation_reasoning_effort': self.effort_menu.get(),
             'judge_reasoning_effort': self.judge_effort_menu.get(),
-            'judge_enabled': self.judging,
+            'mode': ('static_creator_dynamic_judge' if self.judging
+                     else 'static_creator'),
         }
         self.running = True
         self.run_button.configure(state='disabled', text='Running…')

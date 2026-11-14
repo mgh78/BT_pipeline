@@ -46,9 +46,9 @@ RESPONSE_FORMAT = {
 }
 
 # How a run can end. Nobody is ever asked anything, so a run never waits.
-# 'no_judge' is the baseline: the judge was switched off, so the first tree that
-# passes the syntax check is the result and nothing judged it. Syntax failures are
-# repaired in the baseline too.
+# 'no_judge': there is no judge in this mode (Static creator, Dynamic creator), so the
+# first tree that passes the syntax check is the result and nothing judged it. Syntax
+# failures are repaired in these modes too.
 FINAL_STATUSES = ('accepted', 'no_judge', 'failed_judge_cap', 'failed_syntax_cap',
                   'judge_error', 'error')
 
@@ -207,18 +207,18 @@ def run_generation_loop(command, generate, syntax_check, judge, extract_code,
     Nothing in here waits for a person: the generator always returns a tree, and the
     judge is the only thing that decides whether it is right.
 
-    Without a judge (``judge=None``) this is the baseline. A syntax failure is still sent
-    back to the generator, up to the same cap, because that repair is part of getting a
-    tree that can run at all. Only the judge is missing: the first tree that passes the
-    syntax check is the result.
+    Without a judge (``judge=None``: the Static creator and the Dynamic creator modes) a
+    syntax failure is still sent back to the generator, up to the same cap, because that
+    repair is part of getting a tree that can run at all. Only the judge is missing: the
+    first tree that passes the syntax check is the result.
 
     Args:
         command: the command as the user typed it. The generator and the judge are
             both given this.
         generate: ``generate(message, attempt) -> raw reply``.
         syntax_check: ``syntax_check(tree_xml, attempt) -> (passed, tree_or_None, checks)``.
-        judge: ``judge(message, attempt, call) -> raw reply``, or None for the
-            baseline. With no judge nothing decides whether a tree is right, so the
+        judge: ``judge(message, attempt, call) -> raw reply``, or None when the mode
+            has no judge. With no judge nothing decides whether a tree is right, so the
             first tree that passes the syntax check is the result.
         extract_code: ``BTGenerator.extract_code``, which returns the XML tree.
         clock: time source, for tests.
@@ -301,13 +301,13 @@ def run_generation_loop(command, generate, syntax_check, judge, extract_code,
         if record['times']['first_valid_tree'] is None:
             record['times']['first_valid_tree'] = clock()
 
-        # Baseline: no judge, so nothing decides whether the tree is right. The first
+        # No judge in this mode, so nothing decides whether the tree is right. The first
         # tree that can run is the result.
         if judge is None:
             attempt['outline'] = outline_for_judge(tree)
             record['accepted_tree'] = tree
             record['times']['accepted'] = clock()
-            log.info('baseline run: the tree was not judged')
+            log.info('no judge in this mode: the tree was not judged')
             return finish('no_judge')
 
         # Semantic judge. Every tree is a new call, but the judge is shown its own earlier
