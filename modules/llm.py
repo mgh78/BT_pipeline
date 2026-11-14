@@ -122,8 +122,8 @@ def ask(system_prompt, text, model, temperature, logger, context=None,
         logger: the calling module's logger, so the call appears in its own log file.
         context: the RunContext, when the prompt and reply should be saved as artifacts.
         image_path: a scene photo to attach to the user message.
-        tag: artifact name prefix, for example 'enrichment' or 'attempts/01/judge'.
-            It may contain folders, which are created.
+        tag: artifact name prefix, for example 'attempts/01/generation' or
+            'attempts/01/judge'. It may contain folders, which are created.
         response_format: an API response-format object, used by the judge to request
             its judgement form as structured output. Omitted when None.
         reasoning_effort: 'low', 'medium' or 'high'. Sent only to a model that is called

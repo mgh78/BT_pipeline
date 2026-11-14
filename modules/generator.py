@@ -88,7 +88,6 @@ def as_document(tree_xml, payload):
     header = ('<!--\n'
               f'  Scene:    {safe(payload.get("scene"))}\n'
               f'  Command:  {safe(payload.get("command"))}\n'
-              f'  Enriched: {safe(payload.get("enriched_command"))}\n'
               f'  Model:    {safe(payload.get("generation_model") or config.BT_GENERATION_MODEL)}\n'
               '-->\n')
     return header + tree_xml + '\n'

@@ -184,7 +184,6 @@ class Pipeline:
                 'run_id': context.run_id,
                 'scene': payload.get('scene'),
                 'command': payload.get('command'),
-                'enriched_command': payload.get('enriched_command'),
                 'created_at': context.created_at.isoformat(timespec='seconds'),
                 'total_seconds': round(total, 3),
                 # The generation loop's own record: status, counters, every attempt

@@ -1,12 +1,10 @@
 """Stage 1 - the scene.
 
 Loads one of the nine scenes from the contextual-asr workspace knowledge and turns it
-into the two forms the rest of the pipeline needs:
+into the form the rest of the pipeline needs:
 
-* ``objects_block()`` - the exact ``{scene_objects}`` text the behavior tree generator
-  is given, one line per object with a unique id.
-* ``normalized_json()`` - the scene dictionary with normalized object and color names,
-  which is what the enrichment prompt is given.
+* ``objects_block()`` - the exact ``{scene_objects}`` text a prompt that is shown the
+  scene is given, one line per object with a unique id.
 
 The object ids produced here are the same ids the generator is told to use, so the
 syntax tester can check a generated tree against this list and be sure they agree.
@@ -120,18 +118,6 @@ class Scene:
                 return obj
         return None
 
-    def normalized_json(self):
-        """The scene dictionary with normalized names, as the enrichment prompt wants."""
-        object_names, color_names = _normalization_maps()
-        scene = json.loads(json.dumps(self.raw))  # a copy we are free to rewrite
-        for part in scene.get('parts_by_transformation', []):
-            part['name'] = object_names.get(part['name'], part['name'])
-            part['color'] = color_names.get(part['color'], part['color']).lower()
-            liquid = part.setdefault('liquid', {})
-            liquid['color'] = color_names.get(liquid.get('color', ''),
-                                              liquid.get('color', '')).lower()
-        return json.dumps(scene, indent=4)
-
 
 def load_scene(scene_number):
     """Read a scene and give every object a unique, stable id.
@@ -213,8 +199,6 @@ class SceneStage(Stage):
 
         artifacts = {
             'object list': context.write_text('scene_objects.txt', scene.objects_block()),
-            'scene knowledge': context.write_text('scene_knowledge.json',
-                                                  scene.normalized_json()),
         }
         if scene.image_path:
             artifacts['scene photo'] = context.copy_in(scene.image_path, 'scene.jpg')

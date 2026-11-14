@@ -287,6 +287,18 @@ def test_the_history_grows_and_skips_trees_that_were_never_judged(run):
     assert 'Attempt 2' in messages[2] and 'Attempt 3' in messages[2]
 
 
+def test_the_judge_message_starts_with_the_command():
+    message = loop.judge_message(COMMAND, 'Sequence [Root]')
+    assert message.startswith(f'COMMAND: {COMMAND}\n')
+    assert 'REWRITTEN COMMAND:' not in message and 'ORIGINAL COMMAND:' not in message
+
+
+def test_the_judge_and_the_generator_get_the_command_as_typed(run):
+    _, scripted, _ = run([GOOD_TREE], [ACCEPT])
+    assert scripted.messages('generator')[0].startswith(f'COMMAND: {COMMAND}')
+    assert scripted.messages('judge')[0].startswith(f'COMMAND: {COMMAND}')
+
+
 # --- the analysis field --------------------------------------------------------
 
 def test_analysis_comes_first_in_the_schema_and_is_required():

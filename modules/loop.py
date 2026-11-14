@@ -129,19 +129,16 @@ def outline_for_judge(node, depth=0):
     return f'{indent}{kind}({arguments}) [{node.name}]'
 
 
-def judge_message(original_command, rewritten_command, outline, history=()):
+def judge_message(command, outline, history=()):
     """The user message for one judge call.
 
-    The judge is given the command the user typed, because the rewritten one was
-    produced by another model and may itself be the error.
+    The judge is given the command exactly as the user typed it, as the generator is.
 
     ``history`` holds the judge's own earlier judgements in this run, oldest first, each
     ``{'n', 'outline', 'form'}``: the tree it judged and what it decided. They are shown
     with the verdict, errors and reason, but not the analysis.
     """
-    parts = [f'ORIGINAL COMMAND: {original_command}']
-    if rewritten_command and rewritten_command.strip().lower() != original_command.strip().lower():
-        parts.append(f'REWRITTEN COMMAND: {rewritten_command}')
+    parts = [f'COMMAND: {command}']
     if history:
         parts.append('EARLIER JUDGEMENTS:')
         for entry in history:
@@ -203,8 +200,7 @@ def reviewer_problems(form):
 
 # --- The loop -----------------------------------------------------------------
 
-def run_generation_loop(command, original_command, rewritten_command,
-                        generate, syntax_check, judge, extract_code,
+def run_generation_loop(command, generate, syntax_check, judge, extract_code,
                         clock=None, on_update=None):
     """Run generator, syntax check and judge until a tree is accepted.
 
@@ -217,10 +213,8 @@ def run_generation_loop(command, original_command, rewritten_command,
     syntax check is the result.
 
     Args:
-        command: the text the generator works from - the rewritten command when
-            enrichment ran, otherwise the typed one.
-        original_command: what the user typed. The judge is always given this.
-        rewritten_command: the enriched command, or None.
+        command: the command as the user typed it. The generator and the judge are
+            both given this.
         generate: ``generate(message, attempt) -> raw reply``.
         syntax_check: ``syntax_check(tree_xml, attempt) -> (passed, tree_or_None, checks)``.
         judge: ``judge(message, attempt, call) -> raw reply``, or None for the
@@ -319,8 +313,7 @@ def run_generation_loop(command, original_command, rewritten_command,
         # Semantic judge. Every tree is a new call, but the judge is shown its own earlier
         # judgements of this run, so it can see what it already found.
         outline = outline_for_judge(tree)
-        judge_input = judge_message(original_command, rewritten_command, outline,
-                                    history=judged)
+        judge_input = judge_message(command, outline, history=judged)
         attempt.update({'outline': outline, 'judge_message': judge_input,
                         'judge_replies': []})
         message_to_judge = judge_input

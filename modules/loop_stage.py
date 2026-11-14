@@ -1,9 +1,9 @@
 """The pipeline stage that runs the generation loop.
 
-Scene, Command and Enrichment stay a straight sequence; this one stage replaces what
-used to be Generator → Syntax check, and adds the semantic judge and the repairs:
+Scene and Command stay a straight sequence; this one stage replaces what used to be
+Generator → Syntax check, and adds the semantic judge and the repairs:
 
-    Scene → Command → Enrichment → [ Generator → Syntax check → Judge ] → Graph
+    Scene → Command → [ Generator → Syntax check → Judge ] → Graph
 
 It owns the artifacts of every attempt, so nothing a run produces is overwritten when
 a tree is sent back for repair.
@@ -45,9 +45,7 @@ class GenerationLoopStage(Stage):
         if scene is None:
             raise StageError('Run the scene stage first.')
 
-        original = (payload.get('command') or '').strip()
-        rewritten = (payload.get('enriched_command') or '').strip() or None
-        command = rewritten or original
+        command = (payload.get('command') or '').strip()
         if not command:
             raise StageError('There is no command to generate a tree from.')
         payload['generator_input'] = command
@@ -114,8 +112,6 @@ class GenerationLoopStage(Stage):
 
         record = loop.run_generation_loop(
             command=command,
-            original_command=original,
-            rewritten_command=rewritten,
             generate=generate,
             syntax_check=syntax_check,
             judge=ask_judge if judge_enabled else None,
@@ -235,10 +231,6 @@ def loop_summary(record, payload):
     return {
         'status': record['status'],
         'counts': record['counts'],
-        'enrichment': {
-            'on': bool(payload.get('enrichment_on')),
-            **(payload.get('enrichment') or {}),
-        },
         'judge_enabled': bool(payload.get('judge_enabled')),
         'models': {'generator': payload.get('generator'), 'judge': payload.get('judge')},
         'caps': {

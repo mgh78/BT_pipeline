@@ -11,13 +11,13 @@ from pathlib import Path
 PIPELINE_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = PIPELINE_ROOT.parent
 
-# The contextual-asr project supplies the scene knowledge and the enrichment prompts.
-# They are read from there rather than copied, so there is a single source of truth.
+# The contextual-asr project supplies the scene knowledge (the object list of every scene,
+# and the files that normalize its object and colour names) and the API key. They are
+# read from there rather than copied, so there is a single source of truth.
 CONTEXTUAL_ASR_DIR = PROJECT_ROOT / 'contextual-asr' / 'contextual-asr'
 WORKSPACE_KNOWLEDGE_DIR = CONTEXTUAL_ASR_DIR / 'prompt' / 'workspace_knowledge'
 OBJECT_NORMALIZED_FILE = WORKSPACE_KNOWLEDGE_DIR / 'object_normalized.csv'
 COLOR_NORMALIZED_FILE = WORKSPACE_KNOWLEDGE_DIR / 'color_normalized.csv'
-ENRICHMENT_PROMPT_DIR = CONTEXTUAL_ASR_DIR / 'prompt'
 
 # The behavior tree generation prompt is ours to edit, so it lives here.
 BT_GENERATION_PROMPT_FILE = PIPELINE_ROOT / 'prompts' / 'bt_generation_prompt.txt'
@@ -45,15 +45,9 @@ SUPPORT_OBJECTS = {
 
 # --- Language models ---------------------------------------------------------
 
-# The scene photo is NOT sent to the model. Both stages work from the scene object
-# list alone - the ids, colours, roles and x/y/z positions - which is also what the
-# generated tree has to refer to. The photo is still shown in the window.
-# Turning either of these back on also restores the sentences in the enrichment
-# prompt that refer to the image (see modules/enrichment.py).
-ENRICHMENT_MODEL = 'gpt-4o'
-ENRICHMENT_TEMPERATURE = 0
-ENRICHMENT_SEND_SCENE_IMAGE = False
-
+# The scene photo is NOT sent to the model. A model that is shown the scene works from
+# the scene object list alone - the ids, colours, roles and x/y/z positions. The photo
+# is still shown in the window.
 BT_GENERATION_MODEL = 'gpt-4o'
 BT_GENERATION_TEMPERATURE = 0
 BT_GENERATION_SEND_SCENE_IMAGE = False
@@ -104,7 +98,6 @@ AVAILABLE_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-5',
 # the efforts below, so changing them cannot affect a run on another model.
 RESPONSES_API_MODELS = {'gpt-6-luna'}
 REASONING_EFFORTS = ['low', 'medium', 'high']   # what the GUI offers
-ENRICHMENT_REASONING_EFFORT = 'medium'
 BT_GENERATION_REASONING_EFFORT = 'medium'
 JUDGE_REASONING_EFFORT = 'medium'
 

@@ -16,10 +16,7 @@ tree's author so that it can fix the tree.
 
 Input
 The user message contains:
-- ORIGINAL COMMAND: what the user said. This is what the tree must achieve.
-- REWRITTEN COMMAND (if present): the command after another model mapped the user's
-  words to the names of the objects in the scene. The tree's author worked from this
-  version. The mapping is usually right, but it can be wrong.
+- COMMAND: what the user said. This is what the tree must achieve.
 - EARLIER JUDGEMENTS (if present): what you decided about earlier trees written for this
   same command, each with its tree, verdict, errors and reason. They show what has
   already been found. Judge the new tree on its own merits: it may fix what you found,

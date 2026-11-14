@@ -1,6 +1,6 @@
 """The pipeline window.
 
-Left to right it follows the run: the scene on the left, the command and the six
+Left to right it follows the run: the scene on the left, the command and the four
 module panels in the middle, and on the right the tree itself - as a graph, as XML,
 and as the list of checks it had to pass. The log of every module runs along the
 bottom.
@@ -27,7 +27,6 @@ from gui.stage_panel import CheckTable, StagePanel, open_path
 from modules import graph as graph_module
 from modules import loop
 from modules.command import CommandStage
-from modules.enrichment import EnrichmentStage
 from modules.graph import TreeGraphStage
 from modules.loop_stage import GenerationLoopStage
 from modules.scene import SceneStage, load_scene
@@ -113,8 +112,8 @@ class App(customtkinter.CTk):
         self.geometry('1680x1020')
         self.minsize(1380, 860)
 
-        self.stages = [SceneStage(), CommandStage(), EnrichmentStage(),
-                       GenerationLoopStage(), TreeGraphStage()]
+        self.stages = [SceneStage(), CommandStage(), GenerationLoopStage(),
+                       TreeGraphStage()]
         self.pipeline = Pipeline(self.stages, on_update=self._stage_updated)
         self.panels = {}
         self.context = None
@@ -150,8 +149,7 @@ class App(customtkinter.CTk):
         header.grid_columnconfigure(1, weight=1)
 
         customtkinter.CTkLabel(
-            header, text='Scene  →  Command  →  Scene-aware command  →  '
-                         'Behavior tree  →  Syntax check  →  Graph',
+            header, text='Scene  →  Command  →  Generation loop  →  Tree graph',
             font=('Arial', 17, 'bold')).grid(row=0, column=0, sticky='w')
 
         self.status_label = customtkinter.CTkLabel(
@@ -193,23 +191,18 @@ class App(customtkinter.CTk):
         self.command_box.grid(row=1, column=0, columnspan=3, padx=14, pady=(0, 8),
                               sticky='ew')
 
-        # The switches and Run share one row and the model menus get the row below: side
-        # by side they need more width than the column has on a laptop screen, and grid
-        # then shrinks the switches to nothing and draws the menus over them.
+        # The mode selector and Run share one row and the model menus get the row below:
+        # side by side they need more width than the column has on a laptop screen, and
+        # grid then shrinks the selector to nothing and draws the menus over them.
         switches = customtkinter.CTkFrame(box, fg_color='transparent')
         switches.grid(row=2, column=0, padx=14, pady=(0, 8), sticky='w')
-
-        self.enrich_switch = customtkinter.CTkSwitch(
-            switches, text='Enrich with the scene first', font=('Arial', 11))
-        self.enrich_switch.select()
-        self.enrich_switch.grid(row=0, column=0, sticky='w')
 
         # Judge: the loop also repairs a rejected tree. Baseline: syntax repairs only, no judge.
         self.mode_selector = customtkinter.CTkSegmentedButton(
             switches, values=[JUDGE_MODE, BASELINE_MODE], font=('Arial', 11),
             command=self.mode_changed)
         self.mode_selector.set(JUDGE_MODE)
-        self.mode_selector.grid(row=0, column=1, sticky='w', padx=(12, 0))
+        self.mode_selector.grid(row=0, column=0, sticky='w')
 
         models = customtkinter.CTkFrame(box, fg_color='transparent')
         models.grid(row=3, column=0, columnspan=2, padx=14, pady=(0, 12), sticky='w')
@@ -357,15 +350,9 @@ class App(customtkinter.CTk):
             return
 
         selected = [stage.name for stage in self.stages]
-        if not self.enrich_switch.get():
-            selected.remove('enrichment')
 
         for panel in self.panels.values():
             panel.reset()
-        if 'enrichment' not in selected:
-            self.panels['enrichment'].set_result(StageResult(
-                stage='enrichment', status=StageStatus.SKIPPED,
-                summary='skipped — the command goes to the generator as typed'))
         self.graph_view.clear('Running…')
         self._set_code('')
         self.check_table.show([])
@@ -379,7 +366,6 @@ class App(customtkinter.CTk):
             'judge_model': self.judge_menu.get(),
             'generation_reasoning_effort': self.effort_menu.get(),
             'judge_reasoning_effort': self.judge_effort_menu.get(),
-            'enrichment_on': 'enrichment' in selected,
             'judge_enabled': self.judging,
         }
         self.running = True
